@@ -16,6 +16,7 @@ const username = ref("")
 const password = ref("")
 const loading = ref(false)
 const githubEnabled = ref(false)
+const turnstileEnabled = ref(false)
 const error = ref("")
 
 async function probeServerConfig() {
@@ -23,9 +24,12 @@ async function probeServerConfig() {
     await auth.setServerUrl(serverInput.value)
     const cfg = await api.config()
     githubEnabled.value = cfg.github.enabled
+    turnstileEnabled.value = Boolean(cfg.turnstile?.enabled)
+    if (turnstileEnabled.value) mode.value = "login"
     error.value = ""
   } catch {
     githubEnabled.value = false
+    turnstileEnabled.value = false
   }
 }
 
@@ -88,7 +92,7 @@ onMounted(probeServerConfig)
         </div>
       </div>
 
-      <div class="mode-tabs">
+      <div v-if="!turnstileEnabled" class="mode-tabs">
         <button :class="{ active: mode === 'login' }" type="button" @click="mode = 'login'">
           <LogIn :size="15" />
           {{ t("auth.login") }}

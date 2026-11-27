@@ -8,6 +8,7 @@ import LocaleSwitcher from "@/components/LocaleSwitcher.vue"
 import ThemeToggle from "@/components/ThemeToggle.vue"
 import { currentLocale, t } from "@/i18n"
 import { useAuthStore } from "@/stores/auth"
+import { theme } from "@/theme"
 
 declare global {
   interface Window {
@@ -81,6 +82,8 @@ async function renderTurnstile() {
 
   turnstileWidgetId.value = window.turnstile.render(turnstileElement.value, {
     sitekey: config.value.turnstile.siteKey,
+    action: mode.value,
+    theme: theme.value,
     language: currentLocale.value,
     callback: (token: string) => {
       turnstileToken.value = token
@@ -135,7 +138,7 @@ watch(turnstileEnabled, async (enabled) => {
   await renderTurnstile()
 })
 
-watch(currentLocale, async () => {
+watch([currentLocale, theme, mode], async () => {
   if (!turnstileEnabled.value) return
   removeTurnstile()
   await nextTick()

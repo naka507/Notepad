@@ -59,7 +59,7 @@ async function startGithubLogin() {
       </div>
 
       <div class="m-card m-login-card">
-        <div class="m-segmented">
+        <div v-if="!auth.siteConfig?.turnstile?.enabled" class="m-segmented">
           <button :class="{ active: mode === 'login' }" type="button" @click="mode = 'login'">
             <LogIn :size="14" />
             {{ t("auth.login") }}

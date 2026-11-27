@@ -112,7 +112,12 @@ authRoutes.get("/api/session", (c) => {
 authRoutes.post("/api/auth/register", async (c) => {
   try {
     const payload = await parseJson(c, registerSchema)
-    await verifyTurnstileIfEnabled(c.env, payload.turnstileToken, c.req.header("CF-Connecting-IP") ?? null)
+    await verifyTurnstileIfEnabled(
+      c.env,
+      payload.turnstileToken,
+      c.req.header("CF-Connecting-IP") ?? null,
+      "register"
+    )
 
     const existing = await c.env.DB.prepare("SELECT 1 FROM user WHERE username = ?")
       .bind(payload.username)
@@ -157,7 +162,14 @@ authRoutes.post("/api/auth/register", async (c) => {
 authRoutes.post("/api/auth/login", async (c) => {
   try {
     const payload = await parseJson(c, loginSchema)
-    await verifyTurnstileIfEnabled(c.env, payload.turnstileToken, c.req.header("CF-Connecting-IP") ?? null)
+    if (payload.client === "web") {
+      await verifyTurnstileIfEnabled(
+        c.env,
+        payload.turnstileToken,
+        c.req.header("CF-Connecting-IP") ?? null,
+        "login"
+      )
+    }
 
     const user = await c.env.DB.prepare("SELECT * FROM user WHERE username = ?")
       .bind(payload.username)

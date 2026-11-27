@@ -356,27 +356,74 @@ export function oauthStateCookie(state: string, requestUrl: string): string {
   })
 }
 
+function allowedTurnstileHostnames(env: CloudflareBindings): Set<string> {
+  const hosts = new Set<string>()
+  const appUrl = env.APP_URL?.trim()
+  if (appUrl) {
+    try {
+      const host = new URL(appUrl).hostname.toLowerCase()
+      if (host) hosts.add(host)
+      if (host === "localhost" || host === "127.0.0.1") {
+        hosts.add("localhost")
+        hosts.add("127.0.0.1")
+      } else if (host === "note.qqx.qzz.io") {
+        hosts.add("notepad-6c8.pages.dev")
+      }
+    } catch {
+      // ignore invalid APP_URL
+    }
+  }
+  return hosts
+}
+
 export async function verifyTurnstileIfEnabled(
   env: CloudflareBindings,
   token: string | undefined,
-  remoteIp: string | null
+  remoteIp: string | null,
+  expectedAction?: "login" | "register"
 ): Promise<void> {
   const config = await getSiteConfig(env, true)
   if (!config.turnstile.enabled) return
-  if (!token) throw new HTTPException(400, { message: "Turnstile token required" })
-  if (!config.turnstile.secretKey) throw new HTTPException(500, { message: "Turnstile is not configured" })
+  if (typeof token !== "string" || token.length === 0 || token.length > 2048) {
+    throw new HTTPException(400, { message: "Turnstile token required" })
+  }
+  if (!config.turnstile.secretKey) {
+    throw new HTTPException(500, { message: "Turnstile is not configured" })
+  }
 
-  const form = new FormData()
-  form.set("secret", config.turnstile.secretKey)
-  form.set("response", token)
-  if (remoteIp) form.set("remoteip", remoteIp)
+  const allowedHosts = allowedTurnstileHostnames(env)
+  if (allowedHosts.size === 0) {
+    throw new HTTPException(500, { message: "Turnstile allowed hostnames not configured" })
+  }
 
-  const response = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
-    method: "POST",
-    body: form
+  const body = new URLSearchParams({
+    secret: config.turnstile.secretKey,
+    response: token
   })
-  const payload = (await response.json()) as { success?: boolean }
-  if (payload?.success !== true) {
+  if (remoteIp) body.set("remoteip", remoteIp)
+
+  let payload: { success?: boolean; hostname?: string; action?: string }
+  try {
+    const response = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      signal: AbortSignal.timeout(10_000),
+      body
+    })
+    if (!response.ok) {
+      throw new Error(`siteverify status ${response.status}`)
+    }
+    payload = (await response.json()) as { success?: boolean; hostname?: string; action?: string }
+  } catch {
+    throw new HTTPException(403, { message: "Turnstile verification failed" })
+  }
+
+  const hostname = typeof payload?.hostname === "string" ? payload.hostname.toLowerCase() : ""
+  if (
+    payload?.success !== true ||
+    !allowedHosts.has(hostname) ||
+    (expectedAction && payload?.action !== expectedAction)
+  ) {
     throw new HTTPException(400, { message: "Turnstile verification failed" })
   }
 }

@@ -84,7 +84,7 @@ app.get("/api/openapi.json", (c) =>
     openapi: "3.1.0",
     info: {
       title: "Notepad API",
-      version: "0.1.0",
+      version: "1.0.1",
       description: "Cloudflare-native personal memo, small file vault, custom categories, and timed anonymous sharing API."
     },
     components: {

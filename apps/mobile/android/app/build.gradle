@@ -19,8 +19,8 @@ android {
         applicationId "io.qzz.qqx.notepad"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode (System.getenv('ANDROID_VERSION_CODE') ? System.getenv('ANDROID_VERSION_CODE').toInteger() : 1)
-        versionName (System.getenv('ANDROID_VERSION_NAME') ?: "1.0.0")
+        versionCode (System.getenv('ANDROID_VERSION_CODE') ? System.getenv('ANDROID_VERSION_CODE').toInteger() : 2)
+        versionName (System.getenv('ANDROID_VERSION_NAME') ?: "1.0.1")
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
