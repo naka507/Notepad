@@ -51,7 +51,16 @@ npm run cap:sync
 # Add and open native Android / iOS projects
 npm run cap:add:android -w @notepad/mobile
 npm run cap:open:android -w @notepad/mobile
+
+# Build signed Android Release APK (configure apps/mobile/android/keystore.properties or ANDROID_KEYSTORE_* env vars)
+cd apps/mobile/android && ./gradlew assembleRelease
 ```
+
+### Automated Releases (GitHub Actions)
+
+- `.github/workflows/ci.yml`: Runs `validate:deploy-config`, `typecheck`, and `build` across all workspaces on every push/PR to `main`.
+- `.github/workflows/release.yml`: Triggered by pushing a version tag (e.g. `git tag v1.0.0 && git push --tags`) or manual dispatch. Automatically builds Windows (`.exe`), macOS (`.dmg`), Linux (`.AppImage`), and Android (`.apk`) artifacts and publishes them to GitHub Releases.
+  - Optional Android Release signing secrets in GitHub Repo Settings: `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`.
 
 - Web UI: `http://localhost:5173`
 - API Worker: `http://localhost:8787`

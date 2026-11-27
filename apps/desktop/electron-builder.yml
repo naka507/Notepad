@@ -1,5 +1,7 @@
 appId: io.qzz.qqx.note.desktop
 productName: Notepad
+electronVersion: "35.7.5"
+npmRebuild: false
 directories:
   output: release
 files:
@@ -13,10 +15,16 @@ protocols:
     schemes:
       - notepad
 win:
-  icon: ../../apps/web/public/favicon.ico
+  icon: ../../assets/icon.png
   target:
     - nsis
     - portable
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Notepad
 mac:
   icon: ../../assets/icon.png
   category: public.app-category.productivity
