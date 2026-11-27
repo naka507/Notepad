@@ -320,14 +320,14 @@ export const api = {
     request<{ success: true }>(`/api/notes/${id}/permanent`, { method: "DELETE" }),
 
   listDocuments: (params: {
-    type?: DocumentType
+    docType?: DocumentType
     view?: "active" | "archived" | "trash"
     categoryId?: string
     q?: string
     cursor?: string
   } = {}) => {
     const query = new URLSearchParams()
-    if (params.type) query.set("type", params.type)
+    if (params.docType) query.set("docType", params.docType)
     if (params.view) query.set("view", params.view)
     if (params.categoryId) query.set("categoryId", params.categoryId)
     if (params.q) query.set("q", params.q)

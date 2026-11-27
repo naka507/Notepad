@@ -408,8 +408,6 @@ defineExpose({
             </button>
           </section>
 
-          <p class="server-foot muted">{{ auth.serverUrl }}</p>
-
           <button class="danger-button logout-btn" type="button" @click="confirmLogout">
             <LogOut :size="16" />
             {{ t("nav.logout") }}
@@ -844,7 +842,17 @@ defineExpose({
 }
 
 .cell-group {
-  overflow: hidden;
+  overflow: visible;
+}
+
+.cell-row:first-child {
+  border-top-left-radius: 12px;
+  border-top-right-radius: 12px;
+}
+
+.cell-row:last-child {
+  border-bottom-left-radius: 12px;
+  border-bottom-right-radius: 12px;
 }
 
 .cell-row {
@@ -886,12 +894,6 @@ defineExpose({
   align-items: center;
   gap: 6px;
   font-size: 12px;
-}
-
-.server-foot {
-  margin: 2px 0 0;
-  text-align: center;
-  font-size: 11px;
 }
 
 .logout-btn {

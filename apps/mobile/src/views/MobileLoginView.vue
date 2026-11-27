@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { ChevronDown, ChevronUp, GitBranch, Globe, Loader2, LogIn, UserPlus } from "@lucide/vue"
+import { GitBranch, Loader2, LogIn, UserPlus } from "@lucide/vue"
 import LocaleSwitcher from "@web/components/LocaleSwitcher.vue"
 import ThemeToggle from "@web/components/ThemeToggle.vue"
 import { ref } from "vue"
-import { api, DEFAULT_SERVER_URL } from "@/api/client"
+import { api } from "@/api/client"
 import { currentLocale as locale, t } from "@/i18n"
 import { openExternalUrl } from "@/native/bridge"
 import { useAuthStore } from "@/stores/auth"
@@ -15,25 +15,15 @@ const emit = defineEmits<{
 const auth = useAuthStore()
 
 const mode = ref<"login" | "register">("login")
-const serverInput = ref(auth.serverUrl || DEFAULT_SERVER_URL)
-const showServerBox = ref(false)
 const username = ref("")
 const password = ref("")
 const submitting = ref(false)
 const error = ref("")
 
-async function applyServer(url: string) {
-  serverInput.value = url
-  await auth.setServerUrl(url)
-}
-
 async function submit() {
   error.value = ""
   submitting.value = true
   try {
-    if (serverInput.value.trim() && serverInput.value.trim() !== auth.serverUrl) {
-      await auth.setServerUrl(serverInput.value)
-    }
     if (mode.value === "login") {
       await auth.login({ username: username.value, password: password.value })
     } else {
@@ -48,9 +38,6 @@ async function submit() {
 }
 
 async function startGithubLogin() {
-  if (serverInput.value.trim() && serverInput.value.trim() !== auth.serverUrl) {
-    await auth.setServerUrl(serverInput.value)
-  }
   await openExternalUrl(api.githubLoginUrl)
 }
 </script>
@@ -128,45 +115,6 @@ async function startGithubLogin() {
             {{ t("auth.github") }}
           </button>
         </template>
-
-        <div class="server-toggle-wrap">
-          <button class="server-toggle" type="button" @click="showServerBox = !showServerBox">
-            <span class="server-label">
-              <Globe :size="13" />
-              {{ serverInput }}
-            </span>
-            <ChevronUp v-if="showServerBox" :size="14" />
-            <ChevronDown v-else :size="14" />
-          </button>
-
-          <div v-if="showServerBox" class="server-panel">
-            <input
-              v-model.trim="serverInput"
-              class="input"
-              type="url"
-              placeholder="https://note.qqx.qzz.io"
-              @blur="applyServer(serverInput)"
-            />
-            <div class="server-presets">
-              <button
-                class="preset-chip"
-                :class="{ active: serverInput === DEFAULT_SERVER_URL }"
-                type="button"
-                @click="applyServer(DEFAULT_SERVER_URL)"
-              >
-                {{ locale === "zh-CN" ? "线上服务" : "Cloud" }}
-              </button>
-              <button
-                class="preset-chip"
-                :class="{ active: serverInput === 'http://127.0.0.1:8787' }"
-                type="button"
-                @click="applyServer('http://127.0.0.1:8787')"
-              >
-                {{ locale === "zh-CN" ? "本地 8787" : "Local 8787" }}
-              </button>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   </div>
@@ -281,61 +229,5 @@ async function startGithubLogin() {
   flex: 1;
   height: 1px;
   background: var(--line);
-}
-
-.server-toggle-wrap {
-  border-top: 1px solid var(--line);
-  padding-top: 10px;
-  display: grid;
-  gap: 8px;
-}
-
-.server-toggle {
-  width: 100%;
-  border: 0;
-  background: transparent;
-  color: var(--muted);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 2px 0;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.server-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.server-panel {
-  display: grid;
-  gap: 8px;
-}
-
-.server-presets {
-  display: flex;
-  gap: 6px;
-}
-
-.preset-chip {
-  border: 1px solid var(--line);
-  background: var(--panel-2);
-  color: var(--muted);
-  border-radius: 999px;
-  padding: 4px 10px;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.preset-chip.active {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-contrast);
 }
 </style>

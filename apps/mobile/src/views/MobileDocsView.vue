@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import type {
   Category,
-  CategoryScope,
   DocumentDetail,
   DocumentSummary,
   DocumentType,
@@ -10,15 +9,15 @@ import type {
 import {
   ArrowLeft,
   Download,
-  FilePlus2,
-  FileSpreadsheet,
   FileText,
   Link2,
   Loader2,
   Pin,
+  Plus,
   RefreshCw,
   RotateCcw,
   Search,
+  Table2,
   Trash2,
   Upload
 } from "@lucide/vue"
@@ -30,7 +29,7 @@ import { ElMessage } from "element-plus/es/components/message/index"
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { api } from "@/api/client"
 import { confirmDialog } from "@/components/confirm"
-import { formatDateTime, t } from "@/i18n"
+import { currentLocale as locale, formatDateTime, t } from "@/i18n"
 import { hapticImpact } from "@/native/bridge"
 import { useAuthStore } from "@/stores/auth"
 import { useSyncStore } from "@/stores/sync"
@@ -62,13 +61,14 @@ const emit = defineEmits<{
 const auth = useAuthStore()
 const sync = useSyncStore()
 
-const docType = ref<DocumentType>("doc")
-const categories = ref<Category[]>([])
-const defaultCount = ref(0)
 const selectedCategory = ref("all")
+const docCategories = ref<Category[]>([])
+const sheetCategories = ref<Category[]>([])
+const defaultCount = ref(0)
 const docView = ref<"archived" | "trash">("archived")
 const searchQuery = ref("")
 const showSearch = ref(false)
+const createSheetOpen = ref(false)
 
 const documents = ref<DocumentSummary[]>([])
 const loadingDocs = ref(false)
@@ -85,9 +85,11 @@ const importInput = ref<HTMLInputElement | null>(null)
 let saveTimer: number | null = null
 let searchTimer: number | null = null
 
-const categoryScope = computed<CategoryScope>(() => (docType.value === "sheet" ? "sheet" : "document"))
 const canShare = computed(() => auth.can("share:manage"))
-const acceptImport = computed(() => (docType.value === "sheet" ? ".xlsx,.xls,.csv" : ".docx"))
+const allCategories = computed(() => [...docCategories.value, ...sheetCategories.value])
+const activeCategories = computed(() =>
+  activeDoc.value?.docType === "sheet" ? sheetCategories.value : docCategories.value
+)
 
 watch(
   () => Boolean(activeDoc.value),
@@ -104,15 +106,29 @@ function closeDetail() {
   activeDoc.value = null
 }
 
+function categoryNameFor(item: DocumentSummary): string {
+  if (!item.categoryId) return ""
+  const pool = item.docType === "sheet" ? sheetCategories.value : docCategories.value
+  return pool.find((c) => c.id === item.categoryId)?.name ?? ""
+}
+
 async function loadCategories() {
   try {
-    const res = await api.listCategories(categoryScope.value)
-    categories.value = res.categories
-    defaultCount.value = res.defaultCount
+    const [dRes, sRes] = await Promise.all([
+      api.listCategories("document"),
+      api.listCategories("sheet")
+    ])
+    docCategories.value = dRes.categories
+    sheetCategories.value = sRes.categories
+    defaultCount.value = dRes.defaultCount + sRes.defaultCount
   } catch {
-    categories.value = sync.categories
-      .filter((c) => c.scope === categoryScope.value && c.deletedAt === null)
+    docCategories.value = sync.categories
+      .filter((c) => c.scope === "document" && c.deletedAt === null)
       .map((c) => ({ ...c, itemCount: 0 }))
+    sheetCategories.value = sync.categories
+      .filter((c) => c.scope === "sheet" && c.deletedAt === null)
+      .map((c) => ({ ...c, itemCount: 0 }))
+    defaultCount.value = sync.documents.filter((d) => d.deletedAt === null && d.categoryId === null).length
   }
 }
 
@@ -120,7 +136,6 @@ async function loadDocuments() {
   loadingDocs.value = true
   try {
     const res = await api.listDocuments({
-      type: docType.value,
       view: docView.value,
       ...(selectedCategory.value !== "all" ? { categoryId: selectedCategory.value } : {}),
       ...(searchQuery.value ? { q: searchQuery.value } : {})
@@ -129,7 +144,13 @@ async function loadDocuments() {
   } catch {
     const q = searchQuery.value.toLowerCase()
     documents.value = sync.documents
-      .filter((d) => d.docType === docType.value)
+      .filter((d) => {
+        if (selectedCategory.value === "all") return true
+        if (selectedCategory.value === "default" || selectedCategory.value === "uncategorized") {
+          return d.categoryId === null
+        }
+        return d.categoryId === selectedCategory.value
+      })
       .filter((d) => (docView.value === "trash" ? d.deletedAt !== null : d.deletedAt === null))
       .filter((d) => !q || d.title.toLowerCase().includes(q) || d.excerpt.toLowerCase().includes(q))
       .sort((a, b) => Number(b.isPinned) - Number(a.isPinned) || b.updatedAt - a.updatedAt)
@@ -159,15 +180,16 @@ async function openDocument(id: string) {
   }
 }
 
-async function createDoc() {
+async function createDoc(targetType: DocumentType) {
+  createSheetOpen.value = false
   void hapticImpact("medium")
   try {
-    const catId =
-      selectedCategory.value !== "all" && selectedCategory.value !== "uncategorized"
-        ? selectedCategory.value
-        : null
+    const matchingPool = targetType === "sheet" ? sheetCategories.value : docCategories.value
+    const catId = matchingPool.some((c) => c.id === selectedCategory.value)
+      ? selectedCategory.value
+      : null
     const res = await api.createDocument({
-      docType: docType.value,
+      docType: targetType,
       title: "",
       categoryId: catId
     })
@@ -184,6 +206,11 @@ async function createDoc() {
   } catch (err) {
     ElMessage.error(err instanceof Error ? err.message : "Failed to create document")
   }
+}
+
+function triggerImport() {
+  createSheetOpen.value = false
+  importInput.value?.click()
 }
 
 function scheduleSave() {
@@ -226,13 +253,12 @@ async function onImportPicked(event: Event) {
   input.value = ""
   if (!file) return
   try {
-    const catId =
-      selectedCategory.value !== "all" && selectedCategory.value !== "uncategorized"
-        ? selectedCategory.value
-        : null
+    const lower = file.name.toLowerCase()
+    const targetType: DocumentType =
+      lower.endsWith(".xlsx") || lower.endsWith(".xls") || lower.endsWith(".csv") ? "sheet" : "doc"
     const baseTitle = file.name.replace(/\.[^.]+$/, "")
     let content: Record<string, unknown>
-    if (docType.value === "sheet") {
+    if (targetType === "sheet") {
       content = (await importSpreadsheetFile(file)) as unknown as Record<string, unknown>
     } else {
       const html = await importDocxToHtml(file)
@@ -243,9 +269,9 @@ async function onImportPicked(event: Event) {
       }
     }
     const res = await api.createDocument({
-      docType: docType.value,
+      docType: targetType,
       title: baseTitle,
-      categoryId: catId,
+      categoryId: null,
       content
     })
     ElMessage.success(t("docs.imported"))
@@ -298,11 +324,6 @@ async function restoreActive() {
   await Promise.all([loadCategories(), loadDocuments(), sync.pull()])
 }
 
-watch(docType, () => {
-  selectedCategory.value = "all"
-  void Promise.all([loadCategories(), loadDocuments()])
-})
-
 watch([selectedCategory, docView], () => {
   void loadDocuments()
 })
@@ -329,20 +350,15 @@ defineExpose({
 
 <template>
   <div class="m-docs-shell">
-    <!-- MASTER LIST -->
+    <!-- MASTER LIST (Unified Word Docs + Excel Sheets, no top segmented switcher) -->
     <template v-if="!activeDoc">
       <header class="mobile-topbar">
         <div class="mobile-topbar-inner">
           <div class="mobile-topbar-left">
-            <FileSpreadsheet v-if="docType === 'sheet'" :size="19" />
-            <FileText v-else :size="19" />
-            <h1 class="mobile-topbar-title">{{ docType === "sheet" ? t("nav.sheets") : t("nav.docs") }}</h1>
+            <FileText :size="19" />
+            <h1 class="mobile-topbar-title">{{ t("nav.docs") }}</h1>
           </div>
           <div class="mobile-topbar-actions">
-            <input ref="importInput" type="file" :accept="acceptImport" hidden @change="onImportPicked" />
-            <button class="m-icon-btn" type="button" @click="importInput?.click()">
-              <Upload :size="17" />
-            </button>
             <button class="m-icon-btn" type="button" @click="showSearch = !showSearch">
               <Search :size="18" />
             </button>
@@ -356,27 +372,17 @@ defineExpose({
       <div class="mobile-stage">
         <div class="mobile-scroll with-fab">
           <div class="list-controls">
-            <div class="m-segmented">
-              <button :class="{ active: docType === 'doc' }" type="button" @click="docType = 'doc'">
-                <FileText :size="14" />
-                {{ t("nav.docs") }}
-              </button>
-              <button :class="{ active: docType === 'sheet' }" type="button" @click="docType = 'sheet'">
-                <FileSpreadsheet :size="14" />
-                {{ t("nav.sheets") }}
-              </button>
-            </div>
-
             <div class="filter-row">
               <div class="cat-wrap">
                 <CategoryPicker
                   v-model="selectedCategory"
-                  :scope="categoryScope"
-                  :categories="categories"
+                  scope="document"
+                  :categories="allCategories"
                   :default-count="defaultCount"
                   @changed="loadCategories(); loadDocuments()"
                 />
               </div>
+
               <div class="m-segmented view-seg">
                 <button :class="{ active: docView === 'archived' }" type="button" @click="docView = 'archived'">
                   {{ t("ws.archived") }}
@@ -398,9 +404,8 @@ defineExpose({
           </div>
 
           <div v-else-if="!documents.length" class="m-empty">
-            <FileSpreadsheet v-if="docType === 'sheet'" :size="34" />
-            <FileText v-else :size="34" />
-            <p>{{ docType === "sheet" ? t("docs.emptySheet") : t("docs.emptyWord") }}</p>
+            <FileText :size="34" />
+            <p>{{ t("docs.empty") }}</p>
           </div>
 
           <div v-else class="doc-card-list">
@@ -410,26 +415,83 @@ defineExpose({
               class="m-card doc-card"
               @click="openDocument(item.id)"
             >
-              <div class="doc-card-icon">
-                <FileSpreadsheet v-if="item.docType === 'sheet'" :size="18" />
-                <FileText v-else :size="18" />
+              <!-- Distinct visual badges: Dark solid Grid for Excel vs Light framed W for Word -->
+              <div class="doc-badge" :class="item.docType === 'sheet' ? 'is-sheet' : 'is-doc'">
+                <Table2 v-if="item.docType === 'sheet'" :size="18" />
+                <span v-else class="word-glyph">W</span>
               </div>
+
               <div class="doc-card-main">
                 <div class="doc-card-head">
                   <strong>{{ item.title || t("ws.noteTitle") }}</strong>
                   <Pin v-if="item.isPinned" :size="13" />
                 </div>
                 <p v-if="item.excerpt" class="doc-excerpt">{{ item.excerpt }}</p>
-                <span class="doc-time">{{ formatDateTime(item.updatedAt) }}</span>
+                <div class="doc-foot-row">
+                  <span class="type-pill" :class="item.docType === 'sheet' ? 'is-sheet' : 'is-doc'">
+                    {{ item.docType === "sheet" ? "Excel" : "Word" }}
+                  </span>
+                  <span v-if="categoryNameFor(item)" class="cat-dot">{{ categoryNameFor(item) }}</span>
+                  <span class="doc-time">{{ formatDateTime(item.updatedAt) }}</span>
+                </div>
               </div>
             </article>
           </div>
         </div>
 
-        <button v-if="docView !== 'trash'" class="mobile-fab icon-only" type="button" @click="createDoc">
-          <FilePlus2 :size="22" />
+        <input ref="importInput" type="file" accept=".docx,.xlsx,.xls,.csv" hidden @change="onImportPicked" />
+        <button
+          v-if="docView !== 'trash'"
+          class="mobile-fab icon-only"
+          type="button"
+          :title="t('common.create')"
+          @click="createSheetOpen = true"
+        >
+          <Plus :size="24" />
         </button>
       </div>
+
+      <!-- Create Type Picker Action Sheet -->
+      <Teleport to="body">
+        <Transition name="sheet-fade">
+          <div v-if="createSheetOpen" class="action-sheet-backdrop" @click="createSheetOpen = false">
+            <div class="action-sheet" @click.stop>
+              <div class="sheet-handle" />
+              <div class="sheet-title">
+                {{ locale === "zh-CN" ? "选择新建类型" : "Create New" }}
+              </div>
+
+              <button class="sheet-option" type="button" @click="createDoc('doc')">
+                <span class="doc-badge is-doc"><span class="word-glyph">W</span></span>
+                <span class="sheet-opt-text">
+                  <strong>{{ t("docs.newWord") }}</strong>
+                  <span class="muted">{{ locale === "zh-CN" ? "Word 富文本排版文档" : "Rich text Word document" }}</span>
+                </span>
+              </button>
+
+              <button class="sheet-option" type="button" @click="createDoc('sheet')">
+                <span class="doc-badge is-sheet"><Table2 :size="18" /></span>
+                <span class="sheet-opt-text">
+                  <strong>{{ t("docs.newSheet") }}</strong>
+                  <span class="muted">{{ locale === "zh-CN" ? "Excel 多工作表与公式" : "Multi-sheet Excel workbook" }}</span>
+                </span>
+              </button>
+
+              <button class="sheet-option" type="button" @click="triggerImport">
+                <span class="doc-badge is-import"><Upload :size="17" /></span>
+                <span class="sheet-opt-text">
+                  <strong>{{ locale === "zh-CN" ? "导入本地文件" : "Import File" }}</strong>
+                  <span class="muted">.docx / .xlsx / .csv</span>
+                </span>
+              </button>
+
+              <button class="sheet-cancel" type="button" @click="createSheetOpen = false">
+                {{ t("common.cancel") }}
+              </button>
+            </div>
+          </div>
+        </Transition>
+      </Teleport>
     </template>
 
     <!-- DETAIL EDITOR -->
@@ -510,7 +572,7 @@ defineExpose({
             @change="scheduleSave"
           >
             <option :value="null">{{ t("common.defaultCategory") }}</option>
-            <option v-for="cat in categories" :key="cat.id" :value="cat.id">{{ cat.name }}</option>
+            <option v-for="cat in activeCategories" :key="cat.id" :value="cat.id">{{ cat.name }}</option>
           </select>
         </div>
 
@@ -581,24 +643,55 @@ defineExpose({
 .doc-card {
   padding: 12px 14px;
   display: flex;
-  align-items: flex-start;
-  gap: 11px;
+  align-items: center;
+  gap: 12px;
   cursor: pointer;
+  transition: transform 120ms var(--ease-out);
 }
 
 .doc-card:active {
   transform: scale(0.985);
 }
 
-.doc-card-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 9px;
-  background: var(--panel-2);
-  border: 1px solid var(--line);
+.doc-badge {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
   display: grid;
   place-items: center;
   flex-shrink: 0;
+}
+
+.doc-badge.is-doc {
+  background: #2563eb;
+  border: 1px solid #1d4ed8;
+  color: #ffffff;
+}
+
+.doc-badge.is-sheet {
+  background: #16a34a;
+  border: 1px solid #15803d;
+  color: #ffffff;
+}
+
+:global([data-theme="dark"]) .doc-badge.is-sheet {
+  background: #38bdf8;
+  border-color: #0ea5e9;
+  color: #082f49;
+}
+
+.doc-badge.is-import {
+  background: var(--panel-2);
+  border: 1px dashed var(--muted);
+  color: var(--muted);
+}
+
+.word-glyph {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.04em;
 }
 
 .doc-card-main {
@@ -629,6 +722,50 @@ defineExpose({
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.doc-foot-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.type-pill {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.02em;
+}
+
+.type-pill.is-doc {
+  background: rgba(37, 99, 235, 0.12);
+  border: 1px solid rgba(37, 99, 235, 0.25);
+  color: #1d4ed8;
+}
+
+.type-pill.is-sheet {
+  background: rgba(22, 163, 74, 0.12);
+  border: 1px solid rgba(22, 163, 74, 0.25);
+  color: #15803d;
+}
+
+:global([data-theme="dark"]) .type-pill.is-doc {
+  background: rgba(59, 130, 246, 0.18);
+  border-color: rgba(96, 165, 250, 0.3);
+  color: #93c5fd;
+}
+
+:global([data-theme="dark"]) .type-pill.is-sheet {
+  background: rgba(56, 189, 248, 0.18);
+  border-color: rgba(125, 211, 252, 0.34);
+  color: #7dd3fc;
+}
+
+.cat-dot {
+  font-size: 11px;
+  color: var(--muted);
 }
 
 .doc-time {
@@ -690,5 +827,137 @@ defineExpose({
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+</style>
+
+<style>
+.action-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 3300;
+  background: rgba(0, 0, 0, 0.42);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.action-sheet {
+  width: 100%;
+  max-width: 480px;
+  background: var(--panel);
+  border-top: 1px solid var(--line);
+  border-radius: 18px 18px 0 0;
+  padding: 10px 16px calc(18px + var(--safe-bottom));
+  display: grid;
+  gap: 8px;
+  box-shadow: 0 -10px 32px rgba(0, 0, 0, 0.2);
+}
+
+.sheet-handle {
+  width: 36px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--line);
+  margin: 0 auto 4px;
+}
+
+.sheet-title {
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--muted);
+  padding: 0 4px 4px;
+}
+
+.sheet-option {
+  width: 100%;
+  padding: 11px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sheet-option:active {
+  background: var(--surface-hover);
+}
+
+.action-sheet .doc-badge {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.action-sheet .doc-badge.is-doc {
+  background: #2563eb;
+  border: 1px solid #1d4ed8;
+  color: #ffffff;
+}
+
+.action-sheet .doc-badge.is-sheet {
+  background: #16a34a;
+  border: 1px solid #15803d;
+  color: #ffffff;
+}
+
+[data-theme="dark"] .action-sheet .doc-badge.is-sheet {
+  background: #38bdf8;
+  border-color: #0ea5e9;
+  color: #082f49;
+}
+
+.action-sheet .doc-badge.is-import {
+  background: var(--panel-2);
+  border: 1px dashed var(--muted);
+  color: var(--muted);
+}
+
+.action-sheet .word-glyph {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.sheet-opt-text {
+  display: grid;
+  gap: 2px;
+}
+
+.sheet-opt-text strong {
+  font-size: 15px;
+}
+
+.sheet-opt-text .muted {
+  font-size: 12px;
+}
+
+.sheet-cancel {
+  margin-top: 4px;
+  height: 44px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sheet-fade-enter-active,
+.sheet-fade-leave-active {
+  transition: opacity 180ms ease;
+}
+
+.sheet-fade-enter-from,
+.sheet-fade-leave-to {
+  opacity: 0;
 }
 </style>

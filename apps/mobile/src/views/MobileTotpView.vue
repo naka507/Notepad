@@ -344,9 +344,8 @@ onBeforeUnmount(() => {
           <button class="m-icon-btn" type="button" @click="loadEntries">
             <RefreshCw :class="{ spin: loading }" :size="17" />
           </button>
-          <button class="m-pill-btn" type="button" @click="openAddDialog('manual')">
-            <Plus :size="15" />
-            {{ t("totp.add") }}
+          <button class="m-icon-btn" type="button" :title="t('totp.add')" @click="openAddDialog('manual')">
+            <Plus :size="19" />
           </button>
         </div>
       </div>
@@ -393,16 +392,6 @@ onBeforeUnmount(() => {
         <div v-else-if="!entries.length" class="m-empty">
           <ShieldCheck :size="36" />
           <p>{{ t("totp.empty") }}</p>
-          <div class="empty-actions">
-            <button class="m-pill-btn" type="button" @click="scannerOpen = true">
-              <ScanLine :size="15" />
-              {{ locale === "zh-CN" ? "扫码录入" : "Scan QR" }}
-            </button>
-            <button class="m-pill-btn ghost" type="button" @click="openAddDialog('manual')">
-              <Plus :size="15" />
-              {{ t("totp.add") }}
-            </button>
-          </div>
         </div>
 
         <!-- Mobile Card-Style 2FA List -->

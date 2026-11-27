@@ -94,7 +94,12 @@
   --el-color-primary-light-9: #1c1c22;
   --el-color-primary-dark-2: #ffffff;
   --el-color-danger: #f87171;
-  --el-color-success: #f4f4f5;
+  --el-color-success: #7dd3fc;
+  --el-color-success-light-3: #38bdf8;
+  --el-color-success-light-5: #0ea5e9;
+  --el-color-success-light-7: rgba(56, 189, 248, 0.32);
+  --el-color-success-light-8: rgba(56, 189, 248, 0.24);
+  --el-color-success-light-9: rgba(56, 189, 248, 0.14);
   --el-color-warning: #fbbf24;
   --el-bg-color: #121215;
   --el-bg-color-overlay: #18181c;
