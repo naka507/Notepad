@@ -1,8 +1,10 @@
 <script setup lang="ts">
+import { ROLES } from "@notepad/core"
 import { BookOpen, FileSpreadsheet, FileText, FolderKanban, HardDrive, Link2, Shield, Smartphone } from "@lucide/vue"
 import { ElDialog } from "element-plus/es/components/dialog/index"
-import { ref, type Component } from "vue"
+import { computed, ref, type Component } from "vue"
 import { t } from "@/i18n"
+import { useAuthStore } from "@/stores/auth"
 
 defineProps<{
   modelValue: boolean
@@ -13,7 +15,12 @@ const emit = defineEmits<{
 }>()
 
 const UiDialog = ElDialog as unknown as Component
+const auth = useAuthStore()
+const isAdmin = computed(() => auth.user?.role === ROLES.ADMIN)
 const activeTab = ref<"roles" | "features" | "account">("roles")
+const visibleTab = computed<"roles" | "features" | "account">(() =>
+  isAdmin.value ? activeTab.value : "features"
+)
 </script>
 
 <template>
@@ -31,7 +38,7 @@ const activeTab = ref<"roles" | "features" | "account">("roles")
     </template>
 
     <div class="help-body">
-      <div class="help-tabs" role="tablist">
+      <div v-if="isAdmin" class="help-tabs" role="tablist">
         <button :class="{ active: activeTab === 'roles' }" type="button" @click="activeTab = 'roles'">
           <Shield :size="15" />
           {{ t("help.tabRoles") }}
@@ -47,7 +54,7 @@ const activeTab = ref<"roles" | "features" | "account">("roles")
       </div>
 
       <Transition name="page-fade" mode="out-in">
-        <div v-if="activeTab === 'roles'" key="roles" class="help-section">
+        <div v-if="visibleTab === 'roles'" key="roles" class="help-section">
           <div class="role-grid">
             <div class="help-card">
               <span class="badge">{{ t("role.pending") }}</span>
@@ -72,7 +79,7 @@ const activeTab = ref<"roles" | "features" | "account">("roles")
           </div>
         </div>
 
-        <div v-else-if="activeTab === 'features'" key="features" class="help-section">
+        <div v-else-if="visibleTab === 'features'" key="features" class="help-section">
           <div class="feature-row">
             <FileText :size="18" />
             <div>
