@@ -405,62 +405,50 @@ onUnmounted(() => {
       </button>
     </section>
 
-    <TransitionGroup v-else tag="section" name="list-slide" class="totp-grid">
-      <article v-for="entry in entries" :key="entry.id" class="totp-card">
-        <header class="card-top">
+    <section v-else class="totp-panel">
+      <div class="totp-list-head">
+        <span>{{ t("totp.colAccount") }}</span>
+        <span>{{ t("totp.colCategory") }}</span>
+        <span>{{ t("totp.colCode") }}</span>
+        <span class="head-actions">{{ t("totp.colActions") }}</span>
+      </div>
+
+      <TransitionGroup tag="div" name="list-slide" class="totp-list">
+        <div v-for="entry in entries" :key="entry.id" class="totp-row">
           <div class="issuer-block">
             <div class="issuer-avatar">{{ (entry.issuer || entry.accountName)[0] || "2" }}</div>
             <div class="issuer-meta">
-              <strong>{{ entry.issuer || entry.accountName }}</strong>
+              <div class="issuer-title-line">
+                <strong>{{ entry.issuer || entry.accountName }}</strong>
+                <span v-if="entry.algorithm !== 'SHA1' || entry.digits !== 6 || entry.period !== 30" class="muted spec-chip">
+                  {{ entry.algorithm }} · {{ entry.digits }} · {{ entry.period }}s
+                </span>
+              </div>
               <span class="muted">{{ entry.accountName }}</span>
             </div>
           </div>
 
-          <div class="card-actions">
-            <button
-              v-if="entry.deletedAt === null"
-              class="mini-icon-btn"
-              type="button"
-              :title="t('ws.edit')"
-              @click="openEdit(entry)"
-            >
-              <Pencil :size="13" />
-            </button>
-            <button
-              v-else
-              class="mini-icon-btn"
-              type="button"
-              :title="t('ws.restore')"
-              @click="restoreEntry(entry)"
-            >
-              <RotateCcw :size="13" />
-            </button>
-            <button
-              class="mini-icon-btn danger"
-              type="button"
-              :title="t('common.delete')"
-              @click="removeEntry(entry)"
-            >
-              <Trash2 :size="13" />
-            </button>
-          </div>
-        </header>
-
-        <button
-          class="code-row"
-          type="button"
-          :disabled="entry.deletedAt !== null"
-          :title="t('common.copy')"
-          @click="copyCode(entry)"
-        >
-          <span class="totp-code">{{ formatCode(liveCodes[entry.id]?.code ?? "------") }}</span>
-
-          <div class="code-right">
-            <span v-if="copiedId === entry.id" class="copied-tag">
-              <Check :size="13" />
-              {{ t("common.copied") }}
+          <div class="row-category">
+            <span class="cat-chip">
+              {{ entry.categoryId ? categoryNameMap.get(entry.categoryId) || t("common.defaultCategory") : t("common.defaultCategory") }}
             </span>
-            <Copy v-else :size="14" class="copy-hint" />
+          </div>
+
+          <div class="row-code-cell">
+            <button
+              class="code-pill"
+              type="button"
+              :disabled="entry.deletedAt !== null"
+              :title="t('common.copy')"
+              @click="copyCode(entry)"
+            >
+              <span class="totp-code">{{ formatCode(liveCodes[entry.id]?.code ?? "------") }}</span>
+              <span v-if="copiedId === entry.id" class="copied-tag">
+                <Check :size="13" />
+                {{ t("common.copied") }}
+              </span>
+              <Copy v-else :size="14" class="copy-hint" />
+            </button>
 
             <div
               class="ring-wrap"
@@ -481,18 +469,38 @@ onUnmounted(() => {
               <span class="ring-num">{{ liveCodes[entry.id]?.remainingSec ?? entry.period }}</span>
             </div>
           </div>
-        </button>
 
-        <footer class="card-foot">
-          <span class="cat-chip">
-            {{ entry.categoryId ? categoryNameMap.get(entry.categoryId) || t("common.defaultCategory") : t("common.defaultCategory") }}
-          </span>
-          <span v-if="entry.algorithm !== 'SHA1' || entry.digits !== 6 || entry.period !== 30" class="muted spec-chip">
-            {{ entry.algorithm }} · {{ entry.digits }} · {{ entry.period }}s
-          </span>
-        </footer>
-      </article>
-    </TransitionGroup>
+          <div class="row-actions">
+            <button
+              v-if="entry.deletedAt === null"
+              class="mini-icon-btn"
+              type="button"
+              :title="t('ws.edit')"
+              @click="openEdit(entry)"
+            >
+              <Pencil :size="14" />
+            </button>
+            <button
+              v-else
+              class="mini-icon-btn"
+              type="button"
+              :title="t('ws.restore')"
+              @click="restoreEntry(entry)"
+            >
+              <RotateCcw :size="14" />
+            </button>
+            <button
+              class="mini-icon-btn danger"
+              type="button"
+              :title="t('common.delete')"
+              @click="removeEntry(entry)"
+            >
+              <Trash2 :size="14" />
+            </button>
+          </div>
+        </div>
+      </TransitionGroup>
+    </section>
 
     <!-- Add / Import 2FA Dialog -->
     <UiDialog v-model="addOpen" width="460px" align-center>
@@ -765,33 +773,49 @@ onUnmounted(() => {
   font-size: 13px;
 }
 
-.totp-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
-  gap: 12px;
-}
-
-.totp-card {
+.totp-panel {
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 14px;
+  overflow: hidden;
+}
+
+.totp-list-head,
+.totp-row {
   display: grid;
-  gap: 12px;
-  transition:
-    border-color var(--dur-fast) var(--ease-out),
-    transform var(--dur-fast) var(--ease-out);
-}
-
-.totp-card:hover {
-  border-color: var(--line-strong);
-}
-
-.card-top {
-  display: flex;
+  grid-template-columns: minmax(220px, 1.4fr) minmax(96px, 0.45fr) minmax(220px, auto) 80px;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  gap: 14px;
+  padding: 0 16px;
+}
+
+.totp-list-head {
+  min-height: 40px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.head-actions {
+  text-align: right;
+}
+
+.totp-row {
+  min-height: 64px;
+  padding-top: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+
+.totp-row:last-child {
+  border-bottom: 0;
+}
+
+.totp-row:hover {
+  background: var(--surface-hover);
 }
 
 .issuer-block {
@@ -815,8 +839,20 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 
+.totp-row:hover .issuer-avatar {
+  background: var(--surface-strong);
+}
+
 .issuer-meta {
   display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.issuer-title-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   min-width: 0;
 }
 
@@ -835,47 +871,24 @@ onUnmounted(() => {
   font-size: 12px;
 }
 
-.card-actions {
-  display: inline-flex;
-  gap: 4px;
-  opacity: 0;
-  transition: opacity var(--dur-fast) var(--ease-out);
+.row-category {
+  min-width: 0;
 }
 
-.totp-card:hover .card-actions,
-.totp-card:focus-within .card-actions {
-  opacity: 1;
-}
-
-.mini-icon-btn {
-  width: 26px;
-  height: 26px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--panel);
-  color: var(--muted);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.mini-icon-btn:hover {
-  border-color: var(--accent);
-  color: var(--text);
-}
-
-.mini-icon-btn.danger:hover {
-  border-color: var(--danger);
-  color: var(--danger);
-}
-
-.code-row {
-  width: 100%;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--panel-2);
-  padding: 10px 12px;
+.row-code-cell {
   display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.code-pill {
+  min-width: 158px;
+  height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--panel-2);
+  padding: 0 10px;
+  display: inline-flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
@@ -884,37 +897,33 @@ onUnmounted(() => {
     border-color var(--dur-fast) var(--ease-out);
 }
 
-.code-row:hover:not(:disabled) {
-  background: var(--surface-hover);
-  border-color: var(--line-strong);
+.code-pill:hover:not(:disabled) {
+  background: var(--panel);
+  border-color: var(--accent);
 }
 
 .totp-code {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 24px;
+  font-size: 19px;
   font-weight: 800;
   letter-spacing: 0.06em;
   font-variant-numeric: tabular-nums;
   color: var(--text);
 }
 
-.code-right {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
 .copy-hint {
   color: var(--muted);
+  flex-shrink: 0;
 }
 
 .copied-tag {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  font-size: 12px;
+  gap: 3px;
+  font-size: 11px;
   font-weight: 650;
   color: var(--accent);
+  flex-shrink: 0;
 }
 
 .ring-wrap {
@@ -923,6 +932,7 @@ onUnmounted(() => {
   height: 30px;
   display: grid;
   place-items: center;
+  flex-shrink: 0;
 }
 
 .ring-svg {
@@ -961,24 +971,81 @@ onUnmounted(() => {
   color: var(--danger);
 }
 
-.card-foot {
+.row-actions {
   display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.mini-icon-btn {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--muted);
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  justify-content: center;
+}
+
+.mini-icon-btn:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.mini-icon-btn.danger:hover {
+  border-color: var(--danger);
+  color: var(--danger);
 }
 
 .cat-chip {
+  display: inline-flex;
+  align-items: center;
   font-size: 11px;
   font-weight: 600;
-  padding: 2px 7px;
+  padding: 2px 8px;
   border-radius: 5px;
   background: var(--surface-hover);
   color: var(--muted);
 }
 
+.totp-row:hover .cat-chip {
+  background: var(--surface-strong);
+}
+
 .spec-chip {
   font-size: 11px;
+}
+
+@media (max-width: 760px) {
+  .totp-list-head {
+    display: none;
+  }
+
+  .totp-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+  }
+
+  .row-category {
+    grid-column: 1 / -1;
+    order: 3;
+  }
+
+  .row-code-cell {
+    grid-column: 1 / -1;
+    justify-content: space-between;
+    order: 2;
+  }
+
+  .code-pill {
+    flex: 1;
+  }
+
+  .row-actions {
+    order: 1;
+  }
 }
 
 .add-tabs {
