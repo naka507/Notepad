@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { PERMISSIONS, type SiteConfig, type StorageStats } from "@notepad/core"
-import { BookOpen, GitBranch, HardDrive, KeyRound, Save, Shield, Unlink } from "@lucide/vue"
+import { BookOpen, GitBranch, HardDrive, KeyRound, Loader2, Save, Shield, Unlink } from "@lucide/vue"
 import { ElDialog } from "element-plus/es/components/dialog/index"
 import { ElMessage } from "element-plus/es/components/message/index"
 import { computed, onMounted, ref, type Component } from "vue"
@@ -19,6 +19,8 @@ const router = useRouter()
 
 const config = ref<SiteConfig | null>(null)
 const storageStats = ref<StorageStats | null>(null)
+const loadingConfig = ref(true)
+const loadingStorage = ref(false)
 const helpOpen = ref(false)
 const passwordDialogOpen = ref(false)
 const currentPassword = ref("")
@@ -40,17 +42,35 @@ const storageRatio = computed(() => {
 })
 
 async function loadData() {
-  const siteCfg = await api.config()
-  config.value = {
-    ...siteCfg,
-    turnstile: { ...siteCfg.turnstile, secretKey: siteCfg.turnstile.secretKey ?? "" },
-    github: { ...siteCfg.github, clientSecret: siteCfg.github.clientSecret ?? "" }
-  }
-  hardLimitGb.value = (siteCfg.storageGuardrail.hardLimitBytes / (1024 * 1024 * 1024)).toFixed(1)
+  loadingConfig.value = true
+  loadingStorage.value = canManageConfig.value
 
-  if (canManageConfig.value) {
-    storageStats.value = (await api.storageStats()).stats
-  }
+  const configTask = api
+    .config()
+    .then((siteCfg) => {
+      config.value = {
+        ...siteCfg,
+        turnstile: { ...siteCfg.turnstile, secretKey: siteCfg.turnstile.secretKey ?? "" },
+        github: { ...siteCfg.github, clientSecret: siteCfg.github.clientSecret ?? "" }
+      }
+      hardLimitGb.value = (siteCfg.storageGuardrail.hardLimitBytes / (1024 * 1024 * 1024)).toFixed(1)
+    })
+    .finally(() => {
+      loadingConfig.value = false
+    })
+
+  const storageTask = canManageConfig.value
+    ? api
+        .storageStats()
+        .then((res) => {
+          storageStats.value = res.stats
+        })
+        .finally(() => {
+          loadingStorage.value = false
+        })
+    : Promise.resolve()
+
+  await Promise.all([configTask, storageTask])
 }
 
 function openPasswordModal() {
@@ -201,55 +221,69 @@ onMounted(async () => {
       </section>
 
       <!-- Admin Storage Container Usage -->
-      <section v-if="canManageConfig && storageStats" class="panel storage-panel">
+      <section v-if="canManageConfig" class="panel storage-panel">
         <header>
           <div class="panel-title">
             <HardDrive :size="18" />
             <h2>{{ t("profile.storage") }}</h2>
           </div>
-          <strong class="storage-summary">
+          <strong v-if="storageStats" class="storage-summary">
             {{ formatBytes(storageStats.totalBytes) }} / {{ formatBytes(storageStats.freeTierLimitBytes) }}
           </strong>
+          <Loader2 v-else-if="loadingStorage" class="spin muted" :size="15" />
         </header>
 
-        <div class="progress-track">
-          <div class="progress-fill" :style="{ width: `${storageRatio}%` }" />
+        <div v-if="loadingStorage && !storageStats" class="card-loading">
+          <Loader2 class="spin" :size="18" />
+          <span>{{ t("common.loading") }}</span>
         </div>
 
-        <div class="stat-grid">
-          <div class="stat-box">
-            <span class="muted">{{ t("nav.users") }}</span>
-            <strong>{{ storageStats.totalUsers }}</strong>
+        <template v-else-if="storageStats">
+          <div class="progress-track">
+            <div class="progress-fill" :style="{ width: `${storageRatio}%` }" />
           </div>
-          <div class="stat-box">
-            <span class="muted">{{ t("nav.notes") }}</span>
-            <strong>{{ storageStats.totalNotes }}</strong>
+
+          <div class="stat-grid">
+            <div class="stat-box">
+              <span class="muted">{{ t("nav.users") }}</span>
+              <strong>{{ storageStats.totalUsers }}</strong>
+            </div>
+            <div class="stat-box">
+              <span class="muted">{{ t("nav.notes") }}</span>
+              <strong>{{ storageStats.totalNotes }}</strong>
+            </div>
+            <div class="stat-box">
+              <span class="muted">{{ t("nav.files") }}</span>
+              <strong>{{ storageStats.totalFiles }}</strong>
+            </div>
+            <div class="stat-box">
+              <span class="muted">{{ t("nav.shares") }}</span>
+              <strong>{{ storageStats.activeShares }}</strong>
+            </div>
           </div>
-          <div class="stat-box">
-            <span class="muted">{{ t("nav.files") }}</span>
-            <strong>{{ storageStats.totalFiles }}</strong>
-          </div>
-          <div class="stat-box">
-            <span class="muted">{{ t("nav.shares") }}</span>
-            <strong>{{ storageStats.activeShares }}</strong>
-          </div>
-        </div>
+        </template>
       </section>
 
       <!-- Admin Site Config -->
-      <section v-if="canManageConfig && config" class="panel wide">
+      <section v-if="canManageConfig" class="panel wide">
         <header>
           <div class="panel-title">
             <Shield :size="18" />
             <h2>{{ t("profile.siteConfig") }}</h2>
           </div>
-          <button class="button small" type="button" @click="saveConfig">
+          <button v-if="config" class="button small" type="button" @click="saveConfig">
             <Save :size="15" />
             {{ t("common.save") }}
           </button>
+          <Loader2 v-else-if="loadingConfig" class="spin muted" :size="15" />
         </header>
 
-        <div class="form-grid">
+        <div v-if="loadingConfig && !config" class="card-loading">
+          <Loader2 class="spin" :size="18" />
+          <span>{{ t("common.loading") }}</span>
+        </div>
+
+        <div v-else-if="config" class="form-grid">
           <label class="span-2">
             <span>{{ t("profile.adminContact") }}</span>
             <input v-model.trim="config.adminContact" class="input" placeholder="admin@example.com" />
@@ -478,6 +512,16 @@ onMounted(async () => {
 
 .storage-panel {
   align-content: start;
+}
+
+.card-loading {
+  min-height: 112px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
 }
 
 .storage-summary {
