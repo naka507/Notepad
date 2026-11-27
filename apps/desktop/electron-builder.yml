@@ -1,21 +1,24 @@
 appId: io.qzz.qqx.note.desktop
 productName: Notepad
+executableName: notepad
 electronVersion: "35.7.5"
 npmRebuild: false
 directories:
+  buildResources: build
   output: release
 files:
   - dist/**/*
   - dist-electron/**/*
   - package.json
 extraMetadata:
+  name: notepad
   main: dist-electron/main.cjs
 protocols:
   - name: Notepad Auth
     schemes:
       - notepad
 win:
-  icon: ../../assets/icon.png
+  icon: build/icon.png
   target:
     - nsis
     - portable
@@ -26,12 +29,15 @@ nsis:
   createStartMenuShortcut: true
   shortcutName: Notepad
 mac:
-  icon: ../../assets/icon.png
+  icon: build/icon.png
   category: public.app-category.productivity
   target:
     - dmg
 linux:
-  icon: ../../assets/icon.png
+  icon: build/icon.png
+  executableName: notepad
   category: Utility
   target:
     - AppImage
+appImage:
+  artifactName: "${productName}-${version}.${ext}"

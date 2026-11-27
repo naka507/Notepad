@@ -1,7 +1,9 @@
 {
   "name": "@notepad/desktop",
+  "productName": "Notepad",
   "version": "1.0.0",
   "description": "Notepad cross-platform desktop client for cloud notes, docs, sheets, files, and 2FA.",
+  "homepage": "https://note.qqx.qzz.io",
   "author": "Notepad",
   "private": true,
   "type": "module",
