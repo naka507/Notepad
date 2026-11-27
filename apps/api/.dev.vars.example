@@ -1,0 +1,8 @@
+APP_URL=http://localhost:5173
+
+# Optional for GitHub OAuth login & binding
+# GITHUB_CLIENT_ID=your-github-oauth-client-id
+# GITHUB_CLIENT_SECRET=your-github-oauth-client-secret
+
+# Recommended in production for signed OAuth state & share tokens
+# TOKEN_SIGNING_SECRET=replace-with-random-secret

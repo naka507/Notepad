@@ -1,0 +1,26 @@
+name = "notepad-api"
+account_id = "8848748ad55e30797eb3dc0f1c4d0716"
+main = "src/index.ts"
+compatibility_date = "2026-06-04"
+compatibility_flags = ["nodejs_compat"]
+
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+[vars]
+APP_URL = "https://note.qqx.qzz.io"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "notepad"
+database_id = "639b74be-d2c8-4815-af8f-65548d054fe4"
+migrations_dir = "../../migrations"
+
+[[r2_buckets]]
+binding = "FILES_BUCKET"
+bucket_name = "notepad-files"
+
+[[kv_namespaces]]
+binding = "SITE_CONFIG"
+id = "c56c400df4c64bfaae286af1a1b65db3"

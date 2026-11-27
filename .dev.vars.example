@@ -1,0 +1,11 @@
+APP_URL=http://localhost:5173
+
+# Wrangler reads apps/api/.dev.vars during `npm run dev:api`.
+# Copy apps/api/.dev.vars.example to apps/api/.dev.vars.
+
+# Optional. Configure these for GitHub login & account binding.
+# GITHUB_CLIENT_ID=your-github-oauth-client-id
+# GITHUB_CLIENT_SECRET=your-github-oauth-client-secret
+
+# Optional. Signing secret for OAuth state / device tokens (defaults to ephemeral dev secret locally).
+# TOKEN_SIGNING_SECRET=replace-with-random-32-byte-secret

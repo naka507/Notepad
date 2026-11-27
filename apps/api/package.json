@@ -1,0 +1,23 @@
+{
+  "name": "@notepad/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --config wrangler.toml",
+    "deploy": "wrangler deploy --config wrangler.toml",
+    "build": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "types": "wrangler types worker-configuration.d.ts --env-interface CloudflareBindings --config wrangler.toml"
+  },
+  "dependencies": {
+    "@notepad/core": "0.1.0",
+    "hono": "^4.7.11",
+    "zod": "^3.25.56"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250529.0",
+    "typescript": "^5.8.3",
+    "wrangler": "^4.98.0"
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "name": "notepad",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "dev:web": "npm run dev -w @notepad/web",
+    "dev:api": "npm run dev -w @notepad/api",
+    "dev:cleanup": "npm run dev -w @notepad/cleanup",
+    "deploy:web": "npm run deploy -w @notepad/web",
+    "deploy:api": "npm run deploy -w @notepad/api",
+    "deploy:cleanup": "npm run deploy -w @notepad/cleanup",
+    "deploy:workers": "npm run validate:deploy-config && npm run deploy:api && npm run deploy:cleanup",
+    "deploy:all": "npm run validate:deploy-config && npm run db:migrate:remote && npm run deploy:workers && npm run deploy:web",
+    "validate:deploy-config": "node scripts/validate-deploy-config.mjs",
+    "cf:d1:create": "wrangler d1 create notepad",
+    "cf:r2:create": "wrangler r2 bucket create notepad-files",
+    "cf:kv:create": "wrangler kv namespace create SITE_CONFIG",
+    "secret:github:id": "wrangler secret put GITHUB_CLIENT_ID --config apps/api/wrangler.toml",
+    "secret:github:secret": "wrangler secret put GITHUB_CLIENT_SECRET --config apps/api/wrangler.toml",
+    "secret:token:signing": "wrangler secret put TOKEN_SIGNING_SECRET --config apps/api/wrangler.toml",
+    "db:migrate:local": "wrangler d1 migrations apply notepad --local --config apps/api/wrangler.toml",
+    "db:migrate:remote": "wrangler d1 migrations apply notepad --remote --config apps/api/wrangler.toml"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3",
+    "wrangler": "^4.98.0"
+  }
+}
