@@ -228,6 +228,17 @@ export interface StorageStats {
   hardLimitEnabled: boolean
 }
 
+export interface UserStorageSummary {
+  usedBytes: number
+  usedFileCount: number
+  maxFileCount: number | null
+  remainingFileCount: number | null
+  maxFileSize: number | null
+  lockedFileCount: number
+  containerAvailableBytes: number
+  containerLimitBytes: number
+}
+
 export interface CursorPage<T> {
   items: T[]
   nextCursor: string | null

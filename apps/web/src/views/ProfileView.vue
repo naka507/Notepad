@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { PERMISSIONS, type SiteConfig, type StorageStats } from "@notepad/core"
-import { BookOpen, Check, Copy, GitBranch, HardDrive, KeyRound, Loader2, Save, Shield, Unlink } from "@lucide/vue"
+import { PERMISSIONS, type SiteConfig, type StorageStats, type UserStorageSummary } from "@notepad/core"
+import { BookOpen, Check, Copy, GitBranch, HardDrive, KeyRound, Loader2, Lock, Save, Shield, Unlink } from "@lucide/vue"
 import { ElDialog } from "element-plus/es/components/dialog/index"
 import { ElMessage } from "element-plus/es/components/message/index"
 import { computed, onMounted, ref, type Component } from "vue"
@@ -19,6 +19,7 @@ const router = useRouter()
 
 const config = ref<SiteConfig | null>(null)
 const storageStats = ref<StorageStats | null>(null)
+const userStorage = ref<UserStorageSummary | null>(null)
 const loadingConfig = ref(true)
 const loadingStorage = ref(false)
 const helpOpen = ref(false)
@@ -44,6 +45,10 @@ async function copyCallbackUrl() {
 }
 
 const canManageConfig = computed(() => auth.hasPermission(PERMISSIONS.CONFIG_MANAGE))
+const canViewPersonalStorage = computed(
+  () => !canManageConfig.value && auth.hasPermission(PERMISSIONS.FILE_MANAGE)
+)
+const showStorageCard = computed(() => canManageConfig.value || canViewPersonalStorage.value)
 const githubAccount = computed(
   () => auth.user?.linkedAccounts.find((a) => a.provider === "github") ?? null
 )
@@ -54,10 +59,14 @@ const storageRatio = computed(() => {
   if (!storageStats.value || !storageStats.value.freeTierLimitBytes) return 0
   return Math.min(100, Math.round((storageStats.value.totalBytes / storageStats.value.freeTierLimitBytes) * 100))
 })
+const userQuotaRatio = computed(() => {
+  if (!userStorage.value || !userStorage.value.maxFileCount) return 0
+  return Math.min(100, Math.round((userStorage.value.usedFileCount / userStorage.value.maxFileCount) * 100))
+})
 
 async function loadData() {
   loadingConfig.value = true
-  loadingStorage.value = canManageConfig.value
+  loadingStorage.value = showStorageCard.value
 
   const configTask = api
     .config()
@@ -82,7 +91,16 @@ async function loadData() {
         .finally(() => {
           loadingStorage.value = false
         })
-    : Promise.resolve()
+    : canViewPersonalStorage.value
+      ? api
+          .userStorageSummary()
+          .then((res) => {
+            userStorage.value = res.summary
+          })
+          .finally(() => {
+            loadingStorage.value = false
+          })
+      : Promise.resolve()
 
   await Promise.all([configTask, storageTask])
 }
@@ -192,7 +210,7 @@ onMounted(async () => {
 
     <div class="profile-grid">
       <!-- Account Security -->
-      <section class="panel" :class="{ wide: !canManageConfig }">
+      <section class="panel" :class="{ wide: !showStorageCard }">
         <header>
           <div class="panel-title">
             <KeyRound :size="18" />
@@ -234,25 +252,32 @@ onMounted(async () => {
         </div>
       </section>
 
-      <!-- Admin Storage Container Usage -->
-      <section v-if="canManageConfig" class="panel storage-panel">
+      <!-- Storage Container (Admin: Global R2; Member/User: Personal Quota & Available Container Capacity) -->
+      <section v-if="showStorageCard" class="panel storage-panel">
         <header>
           <div class="panel-title">
             <HardDrive :size="18" />
             <h2>{{ t("profile.storage") }}</h2>
           </div>
-          <strong v-if="storageStats" class="storage-summary">
+          <strong v-if="canManageConfig && storageStats" class="storage-summary">
             {{ formatBytes(storageStats.totalBytes) }} / {{ formatBytes(storageStats.freeTierLimitBytes) }}
+          </strong>
+          <strong v-else-if="canViewPersonalStorage && userStorage" class="storage-summary">
+            {{
+              userStorage.maxFileCount !== null
+                ? t("ws.quotaUsed", { count: userStorage.usedFileCount, max: userStorage.maxFileCount })
+                : t("ws.quotaUnlimited", { count: userStorage.usedFileCount })
+            }}
           </strong>
           <Loader2 v-else-if="loadingStorage" class="spin muted" :size="15" />
         </header>
 
-        <div v-if="loadingStorage && !storageStats" class="card-loading">
+        <div v-if="loadingStorage && !storageStats && !userStorage" class="card-loading">
           <Loader2 class="spin" :size="18" />
           <span>{{ t("common.loading") }}</span>
         </div>
 
-        <template v-else-if="storageStats">
+        <template v-else-if="canManageConfig && storageStats">
           <div class="progress-track">
             <div class="progress-fill" :style="{ width: `${storageRatio}%` }" />
           </div>
@@ -275,6 +300,36 @@ onMounted(async () => {
               <strong>{{ storageStats.activeShares }}</strong>
             </div>
           </div>
+        </template>
+
+        <template v-else-if="canViewPersonalStorage && userStorage">
+          <div class="progress-track">
+            <div class="progress-fill" :style="{ width: `${userQuotaRatio}%` }" />
+          </div>
+
+          <div class="stat-grid">
+            <div class="stat-box">
+              <span class="muted">{{ t("profile.maxFileSize") }}</span>
+              <strong>{{ userStorage.maxFileSize ? formatBytes(userStorage.maxFileSize) : "∞" }}</strong>
+            </div>
+            <div class="stat-box">
+              <span class="muted">{{ t("profile.remainingFiles") }}</span>
+              <strong>{{ userStorage.remainingFileCount ?? "∞" }}</strong>
+            </div>
+            <div class="stat-box">
+              <span class="muted">{{ t("profile.usedStorage") }}</span>
+              <strong>{{ formatBytes(userStorage.usedBytes) }}</strong>
+            </div>
+            <div class="stat-box">
+              <span class="muted">{{ t("profile.containerAvailable") }}</span>
+              <strong>{{ formatBytes(userStorage.containerAvailableBytes) }}</strong>
+            </div>
+          </div>
+
+          <p v-if="userStorage.lockedFileCount > 0" class="locked-notice">
+            <Lock :size="14" />
+            <span>{{ t("profile.lockedFilesNotice", { count: userStorage.lockedFileCount }) }}</span>
+          </p>
         </template>
       </section>
 
@@ -586,6 +641,18 @@ onMounted(async () => {
 .stat-box strong {
   font-size: 15px;
   color: var(--text);
+}
+
+.locked-notice {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--warning-bg);
+  color: var(--warning);
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .form-grid {

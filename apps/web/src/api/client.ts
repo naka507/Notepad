@@ -17,6 +17,7 @@ import {
   type SiteConfig,
   type StorageStats,
   type UserQuotaSummary,
+  type UserStorageSummary,
   type UserSummary
 } from "@notepad/core"
 import { sha256Hex } from "@/utils/format"
@@ -327,6 +328,7 @@ export const api = {
 
   listUsers: () => request<{ users: ManagedUser[] }>("/api/admin/users"),
   storageStats: () => request<{ stats: StorageStats }>("/api/admin/storage-stats"),
+  userStorageSummary: () => request<{ summary: UserStorageSummary }>("/api/storage/summary"),
   updateUserRole: (userId: string, role: AssignableRole) =>
     request<{ success: true }>(`/api/admin/users/${userId}/role`, {
       method: "PATCH",

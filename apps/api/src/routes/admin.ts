@@ -9,7 +9,8 @@ import {
   updateUserRoleSchema,
   updateUserStatusSchema,
   type ManagedUser,
-  type StorageStats
+  type StorageStats,
+  type UserStorageSummary
 } from "@notepad/core"
 import { Hono } from "hono"
 import { canManageConfig, requirePermission, type AppEnv } from "../lib/auth"
@@ -24,6 +25,7 @@ import {
   tryDeleteQueuedR2Object
 } from "../lib/db"
 import { parseJson, zodErrorResponse } from "../lib/http"
+import { computeFileAccessSnapshot, getTotalGlobalR2Bytes } from "../lib/quota"
 
 export const adminRoutes = new Hono<AppEnv>()
 
@@ -124,6 +126,42 @@ adminRoutes.get("/api/admin/users", async (c) => {
   })
 
   return c.json({ users })
+})
+
+adminRoutes.get("/api/storage/summary", async (c) => {
+  const auth = requirePermission(c, PERMISSIONS.FILE_MANAGE)
+  const [siteConfig, snapshot, userDocBytesRow, globalBytes] = await Promise.all([
+    getSiteConfig(c.env, false),
+    computeFileAccessSnapshot(c.env, auth.user.id, auth.user.roles),
+    c.env.DB.prepare(
+      "SELECT COALESCE(SUM(size), 0) AS bytes FROM document WHERE user_id = ? AND deleted_at IS NULL"
+    )
+      .bind(auth.user.id)
+      .first<{ bytes: number }>(),
+    getTotalGlobalR2Bytes(c.env)
+  ])
+
+  const containerLimitBytes = siteConfig.storageGuardrail.hardLimitEnabled
+    ? Math.min(R2_FREE_TIER_BYTES, siteConfig.storageGuardrail.hardLimitBytes)
+    : R2_FREE_TIER_BYTES
+  const containerAvailableBytes = Math.max(0, containerLimitBytes - globalBytes)
+  const remainingFileCount =
+    snapshot.quota.maxFileCount !== null
+      ? Math.max(0, snapshot.quota.maxFileCount - snapshot.quota.usedFileCount)
+      : null
+
+  const summary: UserStorageSummary = {
+    usedBytes: snapshot.quota.usedBytes + (userDocBytesRow?.bytes ?? 0),
+    usedFileCount: snapshot.quota.usedFileCount,
+    maxFileCount: snapshot.quota.maxFileCount,
+    remainingFileCount,
+    maxFileSize: snapshot.quota.maxFileSize,
+    lockedFileCount: snapshot.quota.lockedFileCount,
+    containerAvailableBytes,
+    containerLimitBytes
+  }
+
+  return c.json({ summary })
 })
 
 adminRoutes.get("/api/admin/storage-stats", async (c) => {
