@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { PERMISSIONS, type SiteConfig, type StorageStats } from "@notepad/core"
-import { BookOpen, GitBranch, HardDrive, KeyRound, Loader2, Save, Shield, Unlink } from "@lucide/vue"
+import { BookOpen, Check, Copy, GitBranch, HardDrive, KeyRound, Loader2, Save, Shield, Unlink } from "@lucide/vue"
 import { ElDialog } from "element-plus/es/components/dialog/index"
 import { ElMessage } from "element-plus/es/components/message/index"
 import { computed, onMounted, ref, type Component } from "vue"
@@ -28,6 +28,20 @@ const newPassword = ref("")
 const nextUsername = ref("")
 const savingPassword = ref(false)
 const hardLimitGb = ref("9.8")
+const copiedCallback = ref(false)
+
+const githubCallbackUrl = computed(() => {
+  if (typeof window === "undefined") return "/api/auth/github/callback"
+  return `${window.location.origin}/api/auth/github/callback`
+})
+
+async function copyCallbackUrl() {
+  await navigator.clipboard.writeText(githubCallbackUrl.value)
+  copiedCallback.value = true
+  window.setTimeout(() => {
+    copiedCallback.value = false
+  }, 1500)
+}
 
 const canManageConfig = computed(() => auth.hasPermission(PERMISSIONS.CONFIG_MANAGE))
 const githubAccount = computed(
@@ -307,6 +321,17 @@ onMounted(async () => {
           <label class="switch-row span-2">
             <input v-model="config.github.enabled" type="checkbox" />
             <span>{{ t("profile.githubEnabled") }}</span>
+          </label>
+          <label class="span-2">
+            <span>{{ t("profile.githubCallbackUrl") }}</span>
+            <div class="copy-input-row">
+              <input :value="githubCallbackUrl" class="input mono-input" readonly />
+              <button class="ghost-button small" type="button" @click="copyCallbackUrl">
+                <Check v-if="copiedCallback" :size="14" />
+                <Copy v-else :size="14" />
+                {{ copiedCallback ? t("common.copied") : t("common.copy") }}
+              </button>
+            </div>
           </label>
           <label>
             <span>{{ t("profile.githubClientId") }}</span>
@@ -591,6 +616,19 @@ onMounted(async () => {
   align-items: center;
   gap: 8px;
   color: var(--text) !important;
+}
+
+.copy-input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.mono-input {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  color: var(--muted);
 }
 
 @media (max-width: 760px) {

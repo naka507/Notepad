@@ -174,6 +174,7 @@ const messages: Record<Locale, Record<string, string>> = {
     "profile.turnstileSiteKey": "Site Key",
     "profile.turnstileSecretKey": "Secret Key",
     "profile.githubEnabled": "启用 GitHub 登录",
+    "profile.githubCallbackUrl": "GitHub 授权回调地址（Callback URL）",
     "profile.githubClientId": "Client ID",
     "profile.githubClientSecret": "Client Secret",
     "profile.configSaved": "配置已保存",
@@ -222,7 +223,7 @@ const messages: Record<Locale, Record<string, string>> = {
     "help.shareTitle": "会员匿名分享",
     "help.shareDesc": "生成高熵随机链接供未登录访客查看或下载，默认 1 小时过期，支持可选提取码、最大次数与随时一键撤销。",
     "help.accountTitle": "账号与 GitHub 双向绑定",
-    "help.accountDesc": "密码注册用户可随时绑定 GitHub；GitHub 注册用户可在「账号安全」补设密码与用户名。解绑 GitHub 前需确保已设置密码，防止账号锁死。",
+    "help.accountDesc": "密码注册用户可随时绑定 GitHub；GitHub 注册用户可在「账号安全」补设密码与用户名。解绑 GitHub 前需确保已设置密码，防止账号锁死。管理员配置 GitHub OAuth App 时，授权回调地址填写「当前站点域名/api/auth/github/callback」（可在站点配置中一键复制）。",
     "help.roadmapTitle": "多端同步与 2FA 规划",
     "help.roadmapDesc": "服务端已内置增量同步游标与冲突保护；后续将陆续发布桌面端（Tauri）与移动端，移动端支持相机扫描二维码录入第三方 2FA 动态码并加密多端同步。"
   },
@@ -394,6 +395,7 @@ const messages: Record<Locale, Record<string, string>> = {
     "profile.turnstileSiteKey": "Site Key",
     "profile.turnstileSecretKey": "Secret Key",
     "profile.githubEnabled": "Enable GitHub OAuth",
+    "profile.githubCallbackUrl": "GitHub OAuth Callback URL",
     "profile.githubClientId": "Client ID",
     "profile.githubClientSecret": "Client Secret",
     "profile.configSaved": "Config saved",
@@ -442,7 +444,7 @@ const messages: Record<Locale, Record<string, string>> = {
     "help.shareTitle": "Anonymous Sharing",
     "help.shareDesc": "Create high-entropy share links for guests to view or download, defaulting to 1 hour with optional password, view cap, and instant revocation.",
     "help.accountTitle": "Account & GitHub Linking",
-    "help.accountDesc": "Password accounts can link GitHub anytime; GitHub-registered accounts can set a password and username in Settings. A password is required before unlinking GitHub.",
+    "help.accountDesc": "Password accounts can link GitHub anytime; GitHub-registered accounts can set a password and username in Settings. A password is required before unlinking GitHub. When creating a GitHub OAuth App, set the Authorization callback URL to '<your-origin>/api/auth/github/callback' (copyable from Site Config).",
     "help.roadmapTitle": "Multi-Device Sync & 2FA Roadmap",
     "help.roadmapDesc": "Incremental sync cursors and conflict protection are built in. Desktop (Tauri) and Mobile clients with QR-scanned TOTP 2FA vault sync are planned next."
   }
