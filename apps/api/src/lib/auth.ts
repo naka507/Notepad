@@ -5,6 +5,7 @@ import {
   hasPermission,
   permissionsForRoles,
   primaryRoleFromRoles,
+  type NativeAuthTokens,
   type Permission,
   type Role,
   type UserSummary
@@ -14,13 +15,24 @@ import { HTTPException } from "hono/http-exception"
 import type { CloudflareBindings } from "../env"
 import { getSiteConfig } from "./config"
 import { parseCookies, serializeCookie } from "./cookies"
-import { randomToken, sha256 } from "./crypto"
-import { getLinkedAccounts, getUserById, getUserRoles, type UserRow } from "./db"
+import { randomToken, sha256, signPayload, verifySignedPayload } from "./crypto"
+import {
+  getLinkedAccounts,
+  getUserById,
+  getUserRoles,
+  type DeviceSessionRow,
+  type UserRow
+} from "./db"
 import { computeFileAccessSnapshot } from "./quota"
+
+const ACCESS_TOKEN_TTL_MS = 15 * 60 * 1000
+const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000
 
 export interface AuthContext {
   user: UserSummary
   rawUser: UserRow
+  sessionKind: "web" | "device"
+  sessionId: string
 }
 
 export interface AppVariables {
@@ -32,8 +44,19 @@ export type AppEnv = {
   Variables: AppVariables
 }
 
+interface AccessTokenPayload extends Record<string, unknown> {
+  typ: "access"
+  sub: string
+  sid: string
+  exp: number
+}
+
 export function getSigningSecret(env: CloudflareBindings): string {
   return env.TOKEN_SIGNING_SECRET || env.GITHUB_CLIENT_SECRET || "notepad-dev-signing-secret"
+}
+
+export function getTotpEncryptionKey(env: CloudflareBindings): string {
+  return env.TOTP_ENCRYPTION_KEY || getSigningSecret(env)
 }
 
 export function getAppUrl(c: Context<AppEnv>): string {
@@ -72,12 +95,12 @@ export async function buildUserSummary(
 async function authFromSession(env: CloudflareBindings, token: string): Promise<AuthContext | null> {
   const tokenHash = await sha256(token)
   const session = await env.DB.prepare(
-    `SELECT user_id
+    `SELECT id, user_id
      FROM session
      WHERE token_hash = ? AND expires_at > ?`
   )
     .bind(tokenHash, Date.now())
-    .first<{ user_id: string }>()
+    .first<{ id: string; user_id: string }>()
 
   if (!session) return null
 
@@ -86,13 +109,45 @@ async function authFromSession(env: CloudflareBindings, token: string): Promise<
 
   const roles = await getUserRoles(env, user.id)
   const summary = await buildUserSummary(env, user, roles)
-  return { user: summary, rawUser: user }
+  return { user: summary, rawUser: user, sessionKind: "web", sessionId: session.id }
+}
+
+async function authFromBearer(env: CloudflareBindings, token: string): Promise<AuthContext | null> {
+  const payload = await verifySignedPayload<AccessTokenPayload>(token, getSigningSecret(env))
+  if (!payload || payload.typ !== "access" || typeof payload.sub !== "string" || typeof payload.sid !== "string") {
+    return null
+  }
+
+  const device = await env.DB.prepare(
+    `SELECT id, user_id
+     FROM device_session
+     WHERE id = ? AND user_id = ? AND revoked_at IS NULL AND expires_at > ?`
+  )
+    .bind(payload.sid, payload.sub, Date.now())
+    .first<{ id: string; user_id: string }>()
+
+  if (!device) return null
+
+  const user = await getUserById(env, device.user_id)
+  if (!user || user.disabled_at !== null) return null
+
+  const roles = await getUserRoles(env, user.id)
+  const summary = await buildUserSummary(env, user, roles)
+  return { user: summary, rawUser: user, sessionKind: "device", sessionId: device.id }
 }
 
 export const authMiddleware: MiddlewareHandler<AppEnv> = async (c, next) => {
   const path = new URL(c.req.url).pathname
   if (path === "/api/health" || path.startsWith("/api/public/")) {
     c.set("auth", null)
+    await next()
+    return
+  }
+
+  const authHeader = c.req.header("Authorization")
+  if (authHeader && authHeader.toLowerCase().startsWith("bearer ")) {
+    const bearer = authHeader.slice(7).trim()
+    c.set("auth", bearer ? await authFromBearer(c.env, bearer) : null)
     await next()
     return
   }
@@ -131,7 +186,7 @@ export async function createSession(
   const token = randomToken(32)
   const tokenHash = await sha256(token)
   const timestamp = Date.now()
-  const expiresAt = timestamp + 30 * 24 * 60 * 60 * 1000
+  const expiresAt = timestamp + REFRESH_TOKEN_TTL_MS
 
   await env.DB.prepare(
     `INSERT INTO session (id, user_id, token_hash, user_agent, ip_address, expires_at, created_at)
@@ -153,6 +208,132 @@ export async function createSession(
 
 export async function deleteSession(env: CloudflareBindings, token: string): Promise<void> {
   await env.DB.prepare("DELETE FROM session WHERE token_hash = ?").bind(await sha256(token)).run()
+}
+
+export async function issueNativeDeviceTokens(
+  env: CloudflareBindings,
+  userId: string,
+  meta: {
+    deviceId?: string | undefined
+    deviceName?: string | undefined
+    platform?: string | undefined
+  }
+): Promise<NativeAuthTokens> {
+  const timestamp = Date.now()
+  const deviceSessionId = crypto.randomUUID()
+  const deviceId = meta.deviceId || crypto.randomUUID()
+  const deviceName = meta.deviceName || "Desktop App"
+  const platform = meta.platform || "desktop"
+  const tokenFamilyId = crypto.randomUUID()
+  const refreshToken = randomToken(40)
+  const refreshTokenHash = await sha256(refreshToken)
+  const accessExpiresAt = timestamp + ACCESS_TOKEN_TTL_MS
+  const refreshExpiresAt = timestamp + REFRESH_TOKEN_TTL_MS
+
+  await env.DB.prepare(
+    `INSERT INTO device_session (
+       id, user_id, device_id, device_name, platform, refresh_token_hash, token_family_id,
+       revoked_at, last_seen_at, expires_at, created_at
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)`
+  )
+    .bind(
+      deviceSessionId,
+      userId,
+      deviceId,
+      deviceName,
+      platform,
+      refreshTokenHash,
+      tokenFamilyId,
+      timestamp,
+      refreshExpiresAt,
+      timestamp
+    )
+    .run()
+
+  const accessToken = await signPayload<AccessTokenPayload>(
+    {
+      typ: "access",
+      sub: userId,
+      sid: deviceSessionId,
+      exp: accessExpiresAt
+    },
+    getSigningSecret(env)
+  )
+
+  return {
+    accessToken,
+    refreshToken,
+    accessExpiresAt,
+    refreshExpiresAt,
+    deviceSessionId
+  }
+}
+
+export async function rotateNativeRefreshToken(
+  env: CloudflareBindings,
+  rawRefreshToken: string
+): Promise<{ user: UserSummary; tokens: NativeAuthTokens } | null> {
+  const tokenHash = await sha256(rawRefreshToken)
+  const timestamp = Date.now()
+
+  const existing = await env.DB.prepare("SELECT * FROM device_session WHERE refresh_token_hash = ?")
+    .bind(tokenHash)
+    .first<DeviceSessionRow>()
+
+  if (!existing) return null
+
+  if (existing.revoked_at !== null) {
+    // Reuse of a revoked token -> revoke entire token family immediately
+    await env.DB.prepare(
+      "UPDATE device_session SET revoked_at = ? WHERE token_family_id = ? AND revoked_at IS NULL"
+    )
+      .bind(timestamp, existing.token_family_id)
+      .run()
+    return null
+  }
+
+  if (existing.expires_at <= timestamp) {
+    return null
+  }
+
+  const user = await getUserById(env, existing.user_id)
+  if (!user || user.disabled_at !== null) return null
+
+  const nextRefreshToken = randomToken(40)
+  const nextRefreshHash = await sha256(nextRefreshToken)
+  const accessExpiresAt = timestamp + ACCESS_TOKEN_TTL_MS
+  const refreshExpiresAt = timestamp + REFRESH_TOKEN_TTL_MS
+
+  await env.DB.prepare(
+    `UPDATE device_session
+     SET refresh_token_hash = ?, last_seen_at = ?, expires_at = ?
+     WHERE id = ? AND user_id = ?`
+  )
+    .bind(nextRefreshHash, timestamp, refreshExpiresAt, existing.id, existing.user_id)
+    .run()
+
+  const roles = await getUserRoles(env, user.id)
+  const summary = await buildUserSummary(env, user, roles)
+  const accessToken = await signPayload<AccessTokenPayload>(
+    {
+      typ: "access",
+      sub: user.id,
+      sid: existing.id,
+      exp: accessExpiresAt
+    },
+    getSigningSecret(env)
+  )
+
+  return {
+    user: summary,
+    tokens: {
+      accessToken,
+      refreshToken: nextRefreshToken,
+      accessExpiresAt,
+      refreshExpiresAt,
+      deviceSessionId: existing.id
+    }
+  }
 }
 
 export function sessionCookie(token: string, requestUrl: string): string {

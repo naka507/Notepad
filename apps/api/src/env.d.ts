@@ -6,4 +6,5 @@ export interface CloudflareBindings {
   GITHUB_CLIENT_ID?: string
   GITHUB_CLIENT_SECRET?: string
   TOKEN_SIGNING_SECRET?: string
+  TOTP_ENCRYPTION_KEY?: string
 }

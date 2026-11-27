@@ -10,6 +10,7 @@ import { fileRoutes } from "./routes/files"
 import { noteRoutes } from "./routes/notes"
 import { shareRoutes } from "./routes/shares"
 import { syncRoutes } from "./routes/sync"
+import { totpRoutes } from "./routes/totp"
 
 const app = new Hono<AppEnv>()
 
@@ -54,6 +55,7 @@ app.route("/", noteRoutes)
 app.route("/", documentRoutes)
 app.route("/", fileRoutes)
 app.route("/", shareRoutes)
+app.route("/", totpRoutes)
 app.route("/", adminRoutes)
 app.route("/", syncRoutes)
 
@@ -80,6 +82,10 @@ app.get("/api/openapi.json", (c) =>
       "/api/auth/register": { post: { summary: "Register (first user atomically becomes admin)" } },
       "/api/auth/login": { post: { summary: "Login with username/password" } },
       "/api/auth/logout": { post: { summary: "Logout session" } },
+      "/api/auth/token/refresh": { post: { summary: "Rotate native client refresh token" } },
+      "/api/auth/oauth/exchange": { post: { summary: "Exchange native OAuth callback code for tokens" } },
+      "/api/auth/devices": { get: { summary: "List active web and device sessions" } },
+      "/api/auth/devices/{id}": { delete: { summary: "Revoke a web or device session" } },
       "/api/auth/github/start": { get: { summary: "Start GitHub OAuth login/register" } },
       "/api/auth/github/bind/start": { get: { summary: "Start GitHub OAuth account binding" } },
       "/api/auth/github/bind": { delete: { summary: "Unlink GitHub account" } },
@@ -96,6 +102,10 @@ app.get("/api/openapi.json", (c) =>
       "/api/public/shares/{code}": { get: { summary: "Anonymous share view" } },
       "/api/public/shares/{code}/download": { get: { summary: "Anonymous share download" } },
       "/api/sync/cursor": { get: { summary: "Lightweight sync cursor probe" } },
+      "/api/sync/pull": { get: { summary: "Incremental multi-device sync pull" } },
+      "/api/sync/push": { post: { summary: "Idempotent multi-device sync push with conflict copies" } },
+      "/api/totp": { get: { summary: "List decrypted 2FA TOTP entries" }, post: { summary: "Create encrypted 2FA TOTP entry" } },
+      "/api/totp/import": { post: { summary: "Batch import otpauth:// URIs" } },
       "/api/admin/users": { get: { summary: "List users for authorization" } },
       "/api/admin/storage-stats": { get: { summary: "Global Cloudflare R2 Free Tier usage stats" } },
       "/api/config": { get: { summary: "Get site config" }, put: { summary: "Update site config" } }

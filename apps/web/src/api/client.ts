@@ -4,6 +4,7 @@ import {
   type Category,
   type CategoryScope,
   type CursorPage,
+  type DeviceSessionSummary,
   type DocumentDetail,
   type DocumentSummary,
   type DocumentType,
@@ -16,6 +17,11 @@ import {
   type ShareTargetType,
   type SiteConfig,
   type StorageStats,
+  type SyncPullResponse,
+  type SyncPushOperation,
+  type SyncPushResponse,
+  type TotpAlgorithm,
+  type TotpEntry,
   type UserQuotaSummary,
   type UserStorageSummary,
   type UserSummary
@@ -85,6 +91,8 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload)
     }),
+  listDevices: () => request<{ devices: DeviceSessionSummary[] }>("/api/auth/devices"),
+  revokeDevice: (id: string) => request<{ success: true }>(`/api/auth/devices/${id}`, { method: "DELETE" }),
 
   config: () => request<SiteConfig>("/api/config"),
   updateConfig: (payload: SiteConfig) =>
@@ -324,7 +332,53 @@ export const api = {
   publicShareDownloadUrl: (code: string, inline = false) =>
     `/api/public/shares/${code}/download${inline ? "?inline=1" : ""}`,
 
-  syncCursor: () => request<{ currentSeq: number; serverTime: number }>("/api/sync/cursor"),
+  syncCursor: () => request<{ currentSeq: number; minRetainedSeq: number; serverTime: number }>("/api/sync/cursor"),
+  syncPull: (sinceSeq = 0, limit = 100) =>
+    request<SyncPullResponse>(`/api/sync/pull?sinceSeq=${sinceSeq}&limit=${limit}`),
+  syncPush: (operations: SyncPushOperation[]) =>
+    request<SyncPushResponse>("/api/sync/push", {
+      method: "POST",
+      body: JSON.stringify({ operations })
+    }),
+
+  listTotp: (params: { view?: "archived" | "trash"; categoryId?: string; q?: string } = {}) => {
+    const query = new URLSearchParams()
+    if (params.view) query.set("view", params.view)
+    if (params.categoryId) query.set("categoryId", params.categoryId)
+    if (params.q) query.set("q", params.q)
+    const qs = query.toString()
+    return request<{ items: TotpEntry[]; total: number }>(`/api/totp${qs ? `?${qs}` : ""}`)
+  },
+  createTotp: (payload: {
+    issuer?: string
+    accountName: string
+    secret: string
+    algorithm?: TotpAlgorithm
+    digits?: 6 | 8
+    period?: number
+    categoryId?: string | null
+  }) =>
+    request<{ entry: TotpEntry }>("/api/totp", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    }),
+  importTotp: (payload: { uris: string[]; categoryId?: string | null }) =>
+    request<{ imported: TotpEntry[]; skipped: number }>("/api/totp/import", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    }),
+  updateTotp: (
+    id: string,
+    payload: { issuer?: string; accountName?: string; categoryId?: string | null; baseVersion?: number }
+  ) =>
+    request<{ entry: TotpEntry }>(`/api/totp/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload)
+    }),
+  deleteTotp: (id: string) => request<{ success: true }>(`/api/totp/${id}`, { method: "DELETE" }),
+  restoreTotp: (id: string) => request<{ success: true }>(`/api/totp/${id}/restore`, { method: "POST" }),
+  permanentDeleteTotp: (id: string) =>
+    request<{ success: true }>(`/api/totp/${id}/permanent`, { method: "DELETE" }),
 
   listUsers: () => request<{ users: ManagedUser[] }>("/api/admin/users"),
   storageStats: () => request<{ stats: StorageStats }>("/api/admin/storage-stats"),

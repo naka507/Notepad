@@ -55,7 +55,7 @@ export interface SiteConfig {
   }
 }
 
-export type CategoryScope = "note" | "document" | "sheet" | "file"
+export type CategoryScope = "note" | "document" | "sheet" | "file" | "totp"
 
 export interface Category {
   id: string
@@ -70,6 +70,7 @@ export interface Category {
   docCount?: number
   sheetCount?: number
   fileCount?: number
+  totpCount?: number
   version: number
   createdAt: number
   updatedAt: number
@@ -243,4 +244,104 @@ export interface CursorPage<T> {
   items: T[]
   nextCursor: string | null
   total: number
+}
+
+export type TotpAlgorithm = "SHA1" | "SHA256" | "SHA512"
+
+export interface TotpEntry {
+  id: string
+  categoryId: string | null
+  issuer: string
+  accountName: string
+  secret: string
+  algorithm: TotpAlgorithm
+  digits: 6 | 8
+  period: number
+  sortOrder: number
+  version: number
+  syncSeq: number
+  deletedAt: number | null
+  createdAt: number
+  updatedAt: number
+}
+
+export type ClientType = "web" | "desktop" | "mobile"
+
+export interface NativeAuthTokens {
+  accessToken: string
+  refreshToken: string
+  accessExpiresAt: number
+  refreshExpiresAt: number
+  deviceSessionId: string
+}
+
+export interface DeviceSessionSummary {
+  id: string
+  kind: "web" | "device"
+  deviceId: string | null
+  deviceName: string
+  platform: string
+  ipAddress: string | null
+  lastSeenAt: number
+  expiresAt: number
+  createdAt: number
+  isCurrent: boolean
+}
+
+export interface SyncCategoryRecord extends Category {
+  syncSeq: number
+  deletedAt: number | null
+}
+
+export interface SyncNoteRecord extends NoteDetail {
+  syncSeq: number
+}
+
+export interface SyncDocumentRecord extends DocumentSummary {
+  syncSeq: number
+}
+
+export interface SyncFileRecord extends FileItem {
+  syncSeq: number
+}
+
+export interface SyncPullResponse {
+  fullResyncRequired: boolean
+  currentSeq: number
+  nextSeq: number
+  hasMore: boolean
+  serverTime: number
+  changes: {
+    categories: SyncCategoryRecord[]
+    notes: SyncNoteRecord[]
+    documents: SyncDocumentRecord[]
+    files: SyncFileRecord[]
+    totpEntries: TotpEntry[]
+  }
+}
+
+export interface SyncPushOperation {
+  clientOpId: string
+  entity: "category" | "note" | "totp"
+  action: "upsert" | "delete"
+  id: string
+  baseVersion?: number | null
+  payload?: Record<string, unknown>
+}
+
+export interface SyncPushItemResult {
+  clientOpId: string
+  entity: "category" | "note" | "totp"
+  id: string
+  status: "applied" | "conflict" | "rejected"
+  version?: number
+  syncSeq?: number
+  conflictCopyId?: string
+  error?: string
+}
+
+export interface SyncPushResponse {
+  currentSeq: number
+  serverTime: number
+  results: SyncPushItemResult[]
 }

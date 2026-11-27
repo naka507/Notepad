@@ -811,10 +811,16 @@ INSERT OR IGNORE INTO role (id, name, description, created_at, updated_at) VALUE
 - `/admin/users` — 管理员用户授权表（参考 `mkmail` 的 `UsersView`，支持一键切角色、启用/禁用、删除与用量预览）。
 - `/s/:code` — 匿名分享极简公开页（无顶栏导航干扰，仅展示标题/文件信息、过期倒计时、安全预览与下载按钮）。
 
-### 8.2 桌面端与移动端演进规划
+### 8.2 桌面端与移动端演进规划（风格复用 + 布局重写）
 
-- **桌面端（Phase 3，推荐 Tauri 2）**：直接复用 `apps/web` 的 Vue 3 代码与 `packages/core`，利用 Rust 侧本地 SQLite (`tauri-plugin-sql`) 驱动离线同步、系统密钥链保存令牌、全局快捷键唤起速记。
-- **移动端（Phase 4，首推 Capacitor 6+ 复用 Vue 3，备选 Tauri 2 Mobile）**：与 Web 共享 80%+ 界面与同步逻辑，集成原生插件（`@capacitor-mlkit/barcode-scanning` 相机扫描 2FA 二维码、`capacitor-native-biometric` 生物识别保护、`@capacitor-community/sqlite` 本地离线库）。
+三端遵循 **「设计令牌与核心能力共享，应用壳层与交互布局按端重写」** 原则，避免把 Web 端响应式页面直接套壳成桌面或移动应用：
+
+- **共享层（`packages/core` + 共享主题变量、i18n、Sync Store、Word/Excel 编辑器内核）**：统一瑞士黑白灰浅/暗色设计体系、[assets/icon.png](../assets/icon.png) 主图标、增量同步引擎与 TOTP 算法。
+- **桌面端（Phase 3，选定 Electron）**：
+  - 采用纯 TypeScript / Node.js 技术栈与全平台一致 Chromium 渲染引擎，保证 TipTap Word 编辑器、Excel 公式表格与 PDF 预览在 Windows/macOS/Linux 100% 表现一致。
+  - **独立重写桌面三栏效率布局**：取消网页顶部导航与外边距，改为无边框自定义标题栏 + 最左 `56px` 窄图标轨（笔记/文档/表格/文件/2FA/分享 + 底部暗黑切换/同步状态/设置）+ 可调宽列表栏 + 全高编辑区；配合 `safeStorage` 系统密钥链、系统托盘、`Ctrl+K` 命令面板与全局快捷键速记窗。
+- **移动端（Phase 4，Capacitor 6+ 打包 Android / iOS）**：
+  - **独立重写移动单栈 + 底部 Tab 布局**：取消分屏改为 Master → Detail 单栈推入导航与手势返回，底部 Tab Bar + 悬浮主按钮（2FA 页直接置顶**相机扫码录入**主按钮）、贴近软键盘顶部的横向滚动编辑辅助条，并集成 `@capacitor-mlkit/barcode-scanning` 相机扫码、`capacitor-native-biometric` 生物识别保护与安全区适配。
 
 ---
 
@@ -873,13 +879,14 @@ npm run deploy:web            # 部署 Cloudflare Pages
 | **ADR-04** | **2FA 范围边界** | 本系统自身账号登录暂不需要 2FA；2FA 模块专用于内置第三方 TOTP 验证码管家（移动端扫码录入 + 加密多端同步）。 |
 | **ADR-05** | **降级即时生效策略** | 管理员降级角色立即生效：所有历史数据与文件完整保留不删除，但超出当前角色权限的内容（降级为 `pending` 时的全部业务数据、降级为 `user` 时 >5MB 或第 100 个之外的文件）实时锁定无法预览/下载，既有活跃分享立即强制撤销失效；恢复角色后文件即时自动解锁。 |
 | **ADR-06** | **UI 风格、动效与帮助文档** | 沿用 `mkmail` 极简黑白灰瑞士网格设计令牌与分栏布局；增加克制的微动效（路由/列表/按压/复制/上传进度，支持 `prefers-reduced-motion`）；工作台严格控制文字密度，所有功能说明与配额/降级规则集中收纳于设置页「说明与帮助」专区。 |
-| **ADR-07** | **独立在线文档模块** | 将在线文档（`/docs`：类 Word 富文本 + 轻量多 Sheet 表格）与轻量记事本分离，共享分类与匿名分享；格式转换（`.docx`/`.xlsx`/`.csv`）100% 在前端按需懒加载执行，文档正文 JSON 存 R2、元信息存 D1，保持在 Cloudflare 免费额度内。 |
+| **ADR-07** | **独立在线文档与表格模块** | 将 Word 富文本文档（`/docs`）与 Excel 在线表格（`/sheets`）从记事本独立拆分，各自拥有独立分类作用域并支持匿名分享；`.docx`/`.xlsx`/`.csv` 格式转换 100% 在前端按需懒加载执行，文档正文 JSON 存 R2、元信息存 D1，保持在 Cloudflare 免费额度内。 |
+| **ADR-08** | **桌面端 Electron 选型与三端布局重写** | 桌面端选定 **Electron**（全栈纯 TS、Chromium 全平台渲染一致）；桌面端与移动端复用极简黑白灰设计令牌与核心编辑器，但**按设备形态独立重写应用布局**（桌面三栏无边框效率布局、移动单栈底部 Tab 布局）。 |
 
 ### 10.2 分阶段实施里程碑
 
 | 阶段 | 交付范围 | 核心验收目标 |
 | :--- | :--- | :--- |
-| **Milestone 1（Web MVP）** | Monorepo 脚手架、D1/R2/KV 绑定、注册/登录、首位自动管理员、GitHub 双向绑定与补设密码、RBAC 四角色与即时降级锁定、自定义分类、Markdown 记事本、5MB 直传 + 自适应分片上传、会员可限范围 1h 匿名分享、管理员后台与 R2 免费额度仪表盘 | 完整部署至 Cloudflare Free Tier，端到端跑通注册授权、配额管控、降级即时锁定与匿名分享 |
-| **Milestone 2（同步与 2FA 底座）** | `sync/cursor` + `sync/pull` + `sync/push` 增量同步、Web IndexedDB 离线缓存、冲突副本 UI、D1 FTS5 全文搜索、Web 端 2FA 保险箱与加密同步、设备会话 Bearer/Refresh Token | 多标签/多设备增量同步流畅，且单日请求与 D1 读写保持在 Free Tier 安全水位内 |
-| **Milestone 3（桌面端）** | Tauri 2 桌面端（Windows/macOS/Linux）、本地 SQLite 离线库、系统密钥链与托盘速记；按需评估接入 Free Tier SQLite-backed DO 实时通知 | 桌面端离线可读写，联网自动同步并安全处理并发冲突 |
-| **Milestone 4（移动端 + 扫码 2FA）** | Capacitor 打包 iOS/Android、原生相机扫描 `otpauth://` 与迁移码、生物识别解锁、可选 E2EE 零知识 2FA 保险箱 | 手机扫码录入 2FA 后快速同步至桌面端与 Web 端并准确生成动态验证码 |
+| **Milestone 1（Web MVP ✅ 已上线）** | Monorepo 脚手架、D1/R2/KV 绑定、注册/登录、首位自动管理员、GitHub 双向绑定与补设密码、RBAC 四角色与即时降级锁定、笔记/文档/表格/文件四模块独立分类、暗黑模式、全平台应用图标、5MB 直传 + 自适应分片上传、匿名分享、存储容器面板 | 已部署至 Cloudflare Free Tier（`https://note.qqx.qzz.io`），端到端跑通全部核心链路 |
+| **Milestone 2（同步与 2FA 底座）** | `sync/cursor` + `sync/pull` + `sync/push` 增量同步与冲突处理、Web 端 2FA（TOTP）验证码保险箱（AES-256-GCM 加密存储 + 手动/URI/图片二维码录入）、原生端 Bearer/Refresh Token 轮换、GitHub OAuth 原生回跳交换与已登录设备远程踢出 | 多端增量同步与 2FA 验证码保险箱上线运行，且 D1/Workers 读写保持在 Free Tier 安全水位内 |
+| **Milestone 3（桌面端：Electron）** | Electron 桌面端（Windows/macOS/Linux）、独立重写无边框三栏布局、系统密钥链 `safeStorage`、系统托盘、`Ctrl+K` 快捷检索与离线缓存同步 | 桌面端具备原生级三栏效率布局与快捷键体验，支持多端增量同步 |
+| **Milestone 4（移动端 + 扫码 2FA）** | Capacitor 打包 Android/iOS、独立重写单栈 + 底部 Tab 移动端布局、原生相机扫描 `otpauth://` 二维码、生物识别解锁保护 2FA 保险箱 | 手机扫码录入 2FA 后快速加密同步至桌面端与 Web 端并准确生成动态验证码 |

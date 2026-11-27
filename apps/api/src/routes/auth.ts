@@ -4,8 +4,12 @@ import {
   SESSION_COOKIE_NAME,
   changePasswordSchema,
   loginSchema,
+  oauthExchangeSchema,
+  refreshTokenSchema,
   registerSchema,
-  setPasswordSchema
+  setPasswordSchema,
+  type ClientType,
+  type DeviceSessionSummary
 } from "@notepad/core"
 import { Hono } from "hono"
 import { HTTPException } from "hono/http-exception"
@@ -16,8 +20,10 @@ import {
   deleteSession,
   getAppUrl,
   getSigningSecret,
+  issueNativeDeviceTokens,
   oauthStateCookie,
   requireAuth,
+  rotateNativeRefreshToken,
   sessionCookie,
   verifyTurnstileIfEnabled,
   type AppEnv
@@ -30,15 +36,52 @@ import {
   getUserById,
   getUserRoles,
   now,
-  type UserRow
+  type DeviceSessionRow,
+  type UserRow,
+  type WebSessionRow
 } from "../lib/db"
 import { isRecord, parseJson, zodErrorResponse } from "../lib/http"
 
 interface OAuthStatePayload extends Record<string, unknown> {
   intent: "login" | "bind"
+  client?: ClientType
   userId?: string
   nonce: string
   exp: number
+}
+
+interface OAuthExchangePayload extends Record<string, unknown> {
+  typ: "oauth_exchange"
+  userId: string
+  client: "desktop" | "mobile"
+  nonce: string
+  exp: number
+}
+
+function summarizeUserAgent(ua: string | null): { deviceName: string; platform: string } {
+  if (!ua) return { deviceName: "Web Browser", platform: "web" }
+  const lower = ua.toLowerCase()
+  const browser = lower.includes("edg/")
+    ? "Edge"
+    : lower.includes("chrome/")
+      ? "Chrome"
+      : lower.includes("firefox/")
+        ? "Firefox"
+        : lower.includes("safari/")
+          ? "Safari"
+          : "Browser"
+  const os = lower.includes("windows")
+    ? "Windows"
+    : lower.includes("mac os")
+      ? "macOS"
+      : lower.includes("android")
+        ? "Android"
+        : lower.includes("iphone") || lower.includes("ipad")
+          ? "iOS"
+          : lower.includes("linux")
+            ? "Linux"
+            : "Web"
+  return { deviceName: `${browser} · ${os}`, platform: "web" }
 }
 
 async function uniqueGithubUsername(env: AppEnv["Bindings"], login: string): Promise<string> {
@@ -88,11 +131,21 @@ authRoutes.post("/api/auth/register", async (c) => {
       passwordSalt: password.salt
     })
 
+    const summary = await buildUserSummary(c.env, user, [assignedRole])
+
+    if (payload.client !== "web") {
+      const tokens = await issueNativeDeviceTokens(c.env, user.id, {
+        deviceId: payload.deviceId,
+        deviceName: payload.deviceName ?? (payload.client === "mobile" ? "Mobile App" : "Desktop App"),
+        platform: payload.platform ?? payload.client
+      })
+      return c.json({ user: summary, tokens }, 201)
+    }
+
     const token = await createSession(c.env, user.id, {
       userAgent: c.req.header("User-Agent") ?? null,
       ipAddress: c.req.header("CF-Connecting-IP") ?? null
     })
-    const summary = await buildUserSummary(c.env, user, [assignedRole])
 
     c.header("Set-Cookie", sessionCookie(token, c.req.url))
     return c.json({ user: summary }, 201)
@@ -123,11 +176,21 @@ authRoutes.post("/api/auth/login", async (c) => {
     }
 
     const roles = await getUserRoles(c.env, user.id)
+    const summary = await buildUserSummary(c.env, user, roles)
+
+    if (payload.client !== "web") {
+      const tokens = await issueNativeDeviceTokens(c.env, user.id, {
+        deviceId: payload.deviceId,
+        deviceName: payload.deviceName ?? (payload.client === "mobile" ? "Mobile App" : "Desktop App"),
+        platform: payload.platform ?? payload.client
+      })
+      return c.json({ user: summary, tokens })
+    }
+
     const token = await createSession(c.env, user.id, {
       userAgent: c.req.header("User-Agent") ?? null,
       ipAddress: c.req.header("CF-Connecting-IP") ?? null
     })
-    const summary = await buildUserSummary(c.env, user, roles)
 
     c.header("Set-Cookie", sessionCookie(token, c.req.url))
     return c.json({ user: summary })
@@ -136,13 +199,138 @@ authRoutes.post("/api/auth/login", async (c) => {
   }
 })
 
+authRoutes.post("/api/auth/token/refresh", async (c) => {
+  try {
+    const payload = await parseJson(c, refreshTokenSchema)
+    const rotated = await rotateNativeRefreshToken(c.env, payload.refreshToken)
+    if (!rotated) {
+      return c.json({ error: "Invalid or expired refresh token" }, 401)
+    }
+    return c.json(rotated)
+  } catch (error) {
+    return zodErrorResponse(c, error)
+  }
+})
+
+authRoutes.post("/api/auth/oauth/exchange", async (c) => {
+  try {
+    const payload = await parseJson(c, oauthExchangeSchema)
+    const verified = await verifySignedPayload<OAuthExchangePayload>(payload.code, getSigningSecret(c.env))
+    if (!verified || verified.typ !== "oauth_exchange" || !verified.userId) {
+      return c.json({ error: "Invalid or expired OAuth exchange code" }, 400)
+    }
+
+    const user = await getUserById(c.env, verified.userId)
+    if (!user || user.disabled_at !== null) {
+      return c.json({ error: "User is unavailable" }, 403)
+    }
+
+    const roles = await getUserRoles(c.env, user.id)
+    const summary = await buildUserSummary(c.env, user, roles)
+    const tokens = await issueNativeDeviceTokens(c.env, user.id, {
+      deviceId: payload.deviceId,
+      deviceName: payload.deviceName ?? (verified.client === "mobile" ? "Mobile App" : "Desktop App"),
+      platform: payload.platform ?? verified.client
+    })
+    return c.json({ user: summary, tokens })
+  } catch (error) {
+    return zodErrorResponse(c, error)
+  }
+})
+
 authRoutes.post("/api/auth/logout", async (c) => {
+  const auth = c.get("auth")
+  if (auth?.sessionKind === "device") {
+    await c.env.DB.prepare("UPDATE device_session SET revoked_at = ? WHERE id = ? AND user_id = ?")
+      .bind(now(), auth.sessionId, auth.user.id)
+      .run()
+    return c.json({ success: true })
+  }
+
   const cookies = parseCookies(c.req.header("Cookie") ?? null)
   const token = cookies.get(SESSION_COOKIE_NAME)
   if (token) {
     await deleteSession(c.env, token)
   }
   c.header("Set-Cookie", expiredCookie(SESSION_COOKIE_NAME, cookieSecure(c)))
+  return c.json({ success: true })
+})
+
+authRoutes.get("/api/auth/devices", async (c) => {
+  const auth = requireAuth(c)
+  const timestamp = now()
+
+  const [webRows, deviceRows] = await Promise.all([
+    c.env.DB.prepare(
+      `SELECT id, user_id, token_hash, user_agent, ip_address, expires_at, created_at
+       FROM session
+       WHERE user_id = ? AND expires_at > ?
+       ORDER BY created_at DESC
+       LIMIT 50`
+    )
+      .bind(auth.user.id, timestamp)
+      .all<WebSessionRow>(),
+    c.env.DB.prepare(
+      `SELECT *
+       FROM device_session
+       WHERE user_id = ? AND revoked_at IS NULL AND expires_at > ?
+       ORDER BY last_seen_at DESC
+       LIMIT 50`
+    )
+      .bind(auth.user.id, timestamp)
+      .all<DeviceSessionRow>()
+  ])
+
+  const devices: DeviceSessionSummary[] = [
+    ...deviceRows.results.map((row) => ({
+      id: row.id,
+      kind: "device" as const,
+      deviceId: row.device_id,
+      deviceName: row.device_name,
+      platform: row.platform,
+      ipAddress: null,
+      lastSeenAt: row.last_seen_at,
+      expiresAt: row.expires_at,
+      createdAt: row.created_at,
+      isCurrent: auth.sessionKind === "device" && auth.sessionId === row.id
+    })),
+    ...webRows.results.map((row) => {
+      const parsed = summarizeUserAgent(row.user_agent)
+      return {
+        id: row.id,
+        kind: "web" as const,
+        deviceId: null,
+        deviceName: parsed.deviceName,
+        platform: parsed.platform,
+        ipAddress: row.ip_address,
+        lastSeenAt: row.created_at,
+        expiresAt: row.expires_at,
+        createdAt: row.created_at,
+        isCurrent: auth.sessionKind === "web" && auth.sessionId === row.id
+      }
+    })
+  ].sort((a, b) => Number(b.isCurrent) - Number(a.isCurrent) || b.lastSeenAt - a.lastSeenAt)
+
+  return c.json({ devices })
+})
+
+authRoutes.delete("/api/auth/devices/:id", async (c) => {
+  const auth = requireAuth(c)
+  const id = c.req.param("id")
+
+  const [webRes, devRes] = await c.env.DB.batch([
+    c.env.DB.prepare("DELETE FROM session WHERE id = ? AND user_id = ?").bind(id, auth.user.id),
+    c.env.DB.prepare("UPDATE device_session SET revoked_at = ? WHERE id = ? AND user_id = ? AND revoked_at IS NULL").bind(
+      now(),
+      id,
+      auth.user.id
+    )
+  ])
+
+  if ((webRes?.meta.changes ?? 0) === 0 && (devRes?.meta.changes ?? 0) === 0) {
+    return c.json({ error: "Device session not found" }, 404)
+  }
+
   return c.json({ success: true })
 })
 
@@ -153,10 +341,13 @@ authRoutes.get("/api/auth/github/start", async (c) => {
     throw new HTTPException(500, { message: "GitHub OAuth is not configured" })
   }
 
+  const rawClient = c.req.query("client")
+  const client: ClientType = rawClient === "desktop" || rawClient === "mobile" ? rawClient : "web"
   const appUrl = getAppUrl(c)
   const state = await signPayload<OAuthStatePayload>(
     {
       intent: "login",
+      client,
       nonce: randomToken(16),
       exp: now() + 10 * 60 * 1000
     },
@@ -185,6 +376,7 @@ authRoutes.get("/api/auth/github/bind/start", async (c) => {
   const state = await signPayload<OAuthStatePayload>(
     {
       intent: "bind",
+      client: "web",
       userId: auth.user.id,
       nonce: randomToken(16),
       exp: now() + 10 * 60 * 1000
@@ -281,7 +473,6 @@ authRoutes.get("/api/auth/github/callback", async (c) => {
 
   c.header("Set-Cookie", expiredCookie(OAUTH_STATE_COOKIE_NAME, cookieSecure(c)))
 
-  // Branch A: Explicit account binding by an already-authenticated user
   if (statePayload.intent === "bind") {
     const auth = c.get("auth")
     if (!auth || !statePayload.userId || auth.user.id !== statePayload.userId) {
@@ -332,7 +523,6 @@ authRoutes.get("/api/auth/github/callback", async (c) => {
     return c.redirect(`${appUrl}/profile?bind=success`)
   }
 
-  // Branch B: Login or Register via GitHub (never silently merges by email to prevent takeover)
   const account = await c.env.DB.prepare(
     "SELECT user_id FROM account WHERE provider = 'github' AND provider_user_id = ?"
   )
@@ -347,7 +537,6 @@ authRoutes.get("/api/auth/github/callback", async (c) => {
   }
 
   if (!user) {
-    // Avoid unique email conflict if another local account already holds that email
     const emailTaken = email
       ? await c.env.DB.prepare("SELECT 1 FROM user WHERE email = ?").bind(email).first()
       : null
@@ -384,6 +573,21 @@ authRoutes.get("/api/auth/github/callback", async (c) => {
          WHERE id = ?`
       ).bind(displayName, avatarUrl, now(), user.id)
     ])
+  }
+
+  // Native clients (Electron Desktop / Capacitor Mobile) exchange a short-lived signed code over deep link
+  if (statePayload.client === "desktop" || statePayload.client === "mobile") {
+    const exchangeCode = await signPayload<OAuthExchangePayload>(
+      {
+        typ: "oauth_exchange",
+        userId: user.id,
+        client: statePayload.client,
+        nonce: randomToken(16),
+        exp: now() + 2 * 60 * 1000
+      },
+      getSigningSecret(c.env)
+    )
+    return c.redirect(`notepad://auth/callback?code=${encodeURIComponent(exchangeCode)}`)
   }
 
   const token = await createSession(c.env, user.id, {
@@ -460,22 +664,31 @@ authRoutes.post("/api/auth/password/change", async (c) => {
     }
 
     const password = await hashPassword(payload.newPassword)
-    const cookies = parseCookies(c.req.header("Cookie") ?? null)
-    const currentToken = cookies.get(SESSION_COOKIE_NAME)
-    const currentTokenHash = currentToken ? await sha256(currentToken) : null
+    const timestamp = now()
 
     const statements = [
       c.env.DB.prepare(
         "UPDATE user SET password_hash = ?, password_salt = ?, updated_at = ? WHERE id = ?"
-      ).bind(password.hash, password.salt, now(), auth.user.id)
+      ).bind(password.hash, password.salt, timestamp, auth.user.id)
     ]
 
-    if (currentTokenHash) {
+    if (auth.sessionKind === "web") {
       statements.push(
-        c.env.DB.prepare("DELETE FROM session WHERE user_id = ? AND token_hash != ?").bind(
+        c.env.DB.prepare("DELETE FROM session WHERE user_id = ? AND id != ?").bind(
           auth.user.id,
-          currentTokenHash
+          auth.sessionId
+        ),
+        c.env.DB.prepare("UPDATE device_session SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL").bind(
+          timestamp,
+          auth.user.id
         )
+      )
+    } else {
+      statements.push(
+        c.env.DB.prepare("DELETE FROM session WHERE user_id = ?").bind(auth.user.id),
+        c.env.DB.prepare(
+          "UPDATE device_session SET revoked_at = ? WHERE user_id = ? AND id != ? AND revoked_at IS NULL"
+        ).bind(timestamp, auth.user.id, auth.sessionId)
       )
     }
 

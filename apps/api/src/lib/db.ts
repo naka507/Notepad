@@ -123,6 +123,51 @@ export interface DocumentRow {
   updated_at: number
 }
 
+export interface TotpEntryRow {
+  id: string
+  user_id: string
+  category_id: string | null
+  issuer: string
+  account_name: string
+  secret_ciphertext: string
+  secret_iv: string
+  encryption_mode: string
+  key_version: number
+  algorithm: "SHA1" | "SHA256" | "SHA512"
+  digits: number
+  period: number
+  sort_order: number
+  version: number
+  sync_seq: number
+  deleted_at: number | null
+  created_at: number
+  updated_at: number
+}
+
+export interface DeviceSessionRow {
+  id: string
+  user_id: string
+  device_id: string
+  device_name: string
+  platform: string
+  refresh_token_hash: string
+  token_family_id: string
+  revoked_at: number | null
+  last_seen_at: number
+  expires_at: number
+  created_at: number
+}
+
+export interface WebSessionRow {
+  id: string
+  user_id: string
+  token_hash: string
+  user_agent: string | null
+  ip_address: string | null
+  expires_at: number
+  created_at: number
+}
+
 export function now(): number {
   return Date.now()
 }

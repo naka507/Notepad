@@ -10,16 +10,37 @@ export const usernameSchema = z
 
 export const passwordSchema = z.string().min(8).max(128)
 
+export const clientTypeSchema = z.enum(["web", "desktop", "mobile"])
+
 export const registerSchema = z.object({
   username: usernameSchema,
   password: passwordSchema,
-  turnstileToken: z.string().optional()
+  turnstileToken: z.string().optional(),
+  client: clientTypeSchema.optional().default("web"),
+  deviceId: z.string().trim().min(4).max(128).optional(),
+  deviceName: z.string().trim().min(1).max(80).optional(),
+  platform: z.string().trim().min(1).max(40).optional()
 })
 
 export const loginSchema = z.object({
   username: usernameSchema,
   password: z.string().min(1),
-  turnstileToken: z.string().optional()
+  turnstileToken: z.string().optional(),
+  client: clientTypeSchema.optional().default("web"),
+  deviceId: z.string().trim().min(4).max(128).optional(),
+  deviceName: z.string().trim().min(1).max(80).optional(),
+  platform: z.string().trim().min(1).max(40).optional()
+})
+
+export const refreshTokenSchema = z.object({
+  refreshToken: z.string().min(16).max(512)
+})
+
+export const oauthExchangeSchema = z.object({
+  code: z.string().min(16).max(1024),
+  deviceId: z.string().trim().min(4).max(128).optional(),
+  deviceName: z.string().trim().min(1).max(80).optional(),
+  platform: z.string().trim().min(1).max(40).optional()
 })
 
 export const setPasswordSchema = z.object({
@@ -32,7 +53,7 @@ export const changePasswordSchema = z.object({
   newPassword: passwordSchema
 })
 
-export const categoryScopeSchema = z.enum(["note", "document", "sheet", "file"])
+export const categoryScopeSchema = z.enum(["note", "document", "sheet", "file", "totp"])
 
 export const createCategorySchema = z.object({
   scope: categoryScopeSchema.optional().default("note"),
@@ -153,4 +174,46 @@ export const updateConfigSchema = z.object({
     hardLimitBytes: z.number().int().min(100 * 1024 * 1024),
     hardLimitEnabled: z.boolean()
   })
+})
+
+export const totpAlgorithmSchema = z.enum(["SHA1", "SHA256", "SHA512"])
+
+export const createTotpSchema = z.object({
+  issuer: z.string().trim().max(80).optional().default(""),
+  accountName: z.string().trim().min(1).max(120),
+  secret: z.string().trim().min(8).max(256),
+  algorithm: totpAlgorithmSchema.optional().default("SHA1"),
+  digits: z.union([z.literal(6), z.literal(8)]).optional().default(6),
+  period: z.number().int().min(10).max(120).optional().default(30),
+  categoryId: z.string().uuid().nullable().optional(),
+  sortOrder: z.number().int().min(0).max(10000).optional().default(0)
+})
+
+export const updateTotpSchema = z.object({
+  issuer: z.string().trim().max(80).optional(),
+  accountName: z.string().trim().min(1).max(120).optional(),
+  categoryId: z.string().uuid().nullable().optional(),
+  sortOrder: z.number().int().min(0).max(10000).optional(),
+  baseVersion: z.number().int().min(1).optional()
+})
+
+export const importTotpUrisSchema = z.object({
+  uris: z.array(z.string().trim().min(10).max(2048)).min(1).max(100),
+  categoryId: z.string().uuid().nullable().optional()
+})
+
+export const syncPushSchema = z.object({
+  operations: z
+    .array(
+      z.object({
+        clientOpId: z.string().trim().min(1).max(128),
+        entity: z.enum(["category", "note", "totp"]),
+        action: z.enum(["upsert", "delete"]),
+        id: z.string().uuid(),
+        baseVersion: z.number().int().min(0).nullable().optional(),
+        payload: z.record(z.unknown()).optional()
+      })
+    )
+    .min(1)
+    .max(50)
 })

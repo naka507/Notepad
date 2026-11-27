@@ -7,6 +7,7 @@ import {
   Link2,
   LogOut,
   Settings,
+  ShieldCheck,
   StickyNote,
   UserCog
 } from "@lucide/vue"
@@ -29,7 +30,8 @@ const primaryNav = computed(() => [
   { path: "/notes", label: t("nav.notes"), icon: StickyNote },
   { path: "/docs", label: t("nav.docs"), icon: FileText },
   { path: "/sheets", label: t("nav.sheets"), icon: FileSpreadsheet },
-  { path: "/files", label: t("nav.files"), icon: HardDrive }
+  { path: "/files", label: t("nav.files"), icon: HardDrive },
+  { path: "/totp", label: t("nav.totp"), icon: ShieldCheck }
 ])
 
 async function goHome() {

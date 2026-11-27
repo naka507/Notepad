@@ -10,6 +10,7 @@ import ProfileView from "@/views/ProfileView.vue"
 import PublicShareView from "@/views/PublicShareView.vue"
 import SharesView from "@/views/SharesView.vue"
 import SheetsView from "@/views/SheetsView.vue"
+import TotpView from "@/views/TotpView.vue"
 import UsersView from "@/views/UsersView.vue"
 
 export const router = createRouter({
@@ -25,6 +26,7 @@ export const router = createRouter({
     { path: "/docs", component: DocumentsView, meta: { permission: PERMISSIONS.NOTE_MANAGE } },
     { path: "/sheets", component: SheetsView, meta: { permission: PERMISSIONS.NOTE_MANAGE } },
     { path: "/files", component: FilesView, meta: { permission: PERMISSIONS.FILE_MANAGE } },
+    { path: "/totp", component: TotpView, meta: { permission: PERMISSIONS.TOTP_MANAGE } },
     { path: "/shares", component: SharesView, meta: { permission: PERMISSIONS.SHARE_MANAGE } },
     { path: "/users", component: UsersView, meta: { permission: PERMISSIONS.USER_MANAGE } },
     { path: "/profile", component: ProfileView }

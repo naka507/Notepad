@@ -17,7 +17,7 @@ function isReservedCategoryName(name: string): boolean {
 }
 
 function parseScope(raw: string | undefined): CategoryScope | null {
-  if (raw === "note" || raw === "document" || raw === "sheet" || raw === "file") return raw
+  if (raw === "note" || raw === "document" || raw === "sheet" || raw === "file" || raw === "totp") return raw
   return null
 }
 
@@ -28,6 +28,7 @@ function categoryFromRow(
     doc_count?: number
     sheet_count?: number
     file_count?: number
+    totp_count?: number
   }
 ): Category {
   return {
@@ -43,6 +44,7 @@ function categoryFromRow(
     ...(row.doc_count !== undefined ? { docCount: row.doc_count } : {}),
     ...(row.sheet_count !== undefined ? { sheetCount: row.sheet_count } : {}),
     ...(row.file_count !== undefined ? { fileCount: row.file_count } : {}),
+    ...(row.totp_count !== undefined ? { totpCount: row.totp_count } : {}),
     version: row.version,
     createdAt: row.created_at,
     updatedAt: row.updated_at
@@ -63,7 +65,9 @@ categoryRoutes.get("/api/categories", async (c) => {
           ? "(SELECT count(*) FROM document d WHERE d.user_id = c.user_id AND d.doc_type = 'doc' AND d.category_id = c.id AND d.deleted_at IS NULL)"
           : scope === "sheet"
             ? "(SELECT count(*) FROM document d WHERE d.user_id = c.user_id AND d.doc_type = 'sheet' AND d.category_id = c.id AND d.deleted_at IS NULL)"
-            : "(SELECT count(*) FROM file_object f WHERE f.user_id = c.user_id AND f.category_id = c.id AND f.deleted_at IS NULL)"
+            : scope === "totp"
+              ? "(SELECT count(*) FROM totp_entry t WHERE t.user_id = c.user_id AND t.category_id = c.id AND t.deleted_at IS NULL)"
+              : "(SELECT count(*) FROM file_object f WHERE f.user_id = c.user_id AND f.category_id = c.id AND f.deleted_at IS NULL)"
 
     const defaultCountSql =
       scope === "note"
@@ -72,7 +76,9 @@ categoryRoutes.get("/api/categories", async (c) => {
           ? "SELECT count(*) AS count FROM document WHERE user_id = ? AND doc_type = 'doc' AND category_id IS NULL AND deleted_at IS NULL"
           : scope === "sheet"
             ? "SELECT count(*) AS count FROM document WHERE user_id = ? AND doc_type = 'sheet' AND category_id IS NULL AND deleted_at IS NULL"
-            : "SELECT count(*) AS count FROM file_object WHERE user_id = ? AND category_id IS NULL AND deleted_at IS NULL"
+            : scope === "totp"
+              ? "SELECT count(*) AS count FROM totp_entry WHERE user_id = ? AND category_id IS NULL AND deleted_at IS NULL"
+              : "SELECT count(*) AS count FROM file_object WHERE user_id = ? AND category_id IS NULL AND deleted_at IS NULL"
 
     const [rows, defaultRow] = await Promise.all([
       c.env.DB.prepare(
@@ -97,13 +103,22 @@ categoryRoutes.get("/api/categories", async (c) => {
             (SELECT count(*) FROM note n WHERE n.user_id = c.user_id AND n.category_id = c.id AND n.deleted_at IS NULL) AS note_count,
             (SELECT count(*) FROM document d WHERE d.user_id = c.user_id AND d.doc_type = 'doc' AND d.category_id = c.id AND d.deleted_at IS NULL) AS doc_count,
             (SELECT count(*) FROM document d WHERE d.user_id = c.user_id AND d.doc_type = 'sheet' AND d.category_id = c.id AND d.deleted_at IS NULL) AS sheet_count,
-            (SELECT count(*) FROM file_object f WHERE f.user_id = c.user_id AND f.category_id = c.id AND f.deleted_at IS NULL) AS file_count
+            (SELECT count(*) FROM file_object f WHERE f.user_id = c.user_id AND f.category_id = c.id AND f.deleted_at IS NULL) AS file_count,
+            (SELECT count(*) FROM totp_entry t WHERE t.user_id = c.user_id AND t.category_id = c.id AND t.deleted_at IS NULL) AS totp_count
      FROM category c
      WHERE c.user_id = ? AND c.deleted_at IS NULL
      ORDER BY c.scope ASC, c.sort_order ASC, c.created_at ASC`
   )
     .bind(auth.user.id)
-    .all<CategoryRow & { note_count: number; doc_count: number; sheet_count: number; file_count: number }>()
+    .all<
+      CategoryRow & {
+        note_count: number
+        doc_count: number
+        sheet_count: number
+        file_count: number
+        totp_count: number
+      }
+    >()
 
   return c.json({
     categories: rows.results.map(categoryFromRow),
@@ -252,9 +267,13 @@ categoryRoutes.delete("/api/categories/:id", async (c) => {
           ? c.env.DB.prepare(
               "UPDATE document SET category_id = NULL, updated_at = ? WHERE user_id = ? AND doc_type = 'sheet' AND category_id = ?"
             )
-          : c.env.DB.prepare(
-              "UPDATE file_object SET category_id = NULL, updated_at = ? WHERE user_id = ? AND category_id = ?"
-            )
+          : existing.scope === "totp"
+            ? c.env.DB.prepare(
+                "UPDATE totp_entry SET category_id = NULL, updated_at = ? WHERE user_id = ? AND category_id = ?"
+              )
+            : c.env.DB.prepare(
+                "UPDATE file_object SET category_id = NULL, updated_at = ? WHERE user_id = ? AND category_id = ?"
+              )
 
   await c.env.DB.batch([
     resetStatement.bind(timestamp, auth.user.id, id),

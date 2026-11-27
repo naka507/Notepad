@@ -1,6 +1,16 @@
 <script setup lang="ts">
 import { ROLES } from "@notepad/core"
-import { BookOpen, FileSpreadsheet, FileText, FolderKanban, HardDrive, Link2, Shield, Smartphone } from "@lucide/vue"
+import {
+  BookOpen,
+  FileSpreadsheet,
+  FileText,
+  FolderKanban,
+  HardDrive,
+  Link2,
+  Shield,
+  ShieldCheck,
+  Smartphone
+} from "@lucide/vue"
 import { ElDialog } from "element-plus/es/components/dialog/index"
 import { computed, ref, type Component } from "vue"
 import { t } from "@/i18n"
@@ -106,6 +116,13 @@ const visibleTab = computed<"roles" | "features" | "account">(() =>
             <div>
               <strong>{{ t("help.shareTitle") }}</strong>
               <p>{{ t("help.shareDesc") }}</p>
+            </div>
+          </div>
+          <div class="feature-row">
+            <ShieldCheck :size="18" />
+            <div>
+              <strong>{{ t("help.roadmapTitle") }}</strong>
+              <p>{{ t("help.roadmapDesc") }}</p>
             </div>
           </div>
         </div>

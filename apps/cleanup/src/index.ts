@@ -88,6 +88,7 @@ async function cleanupOldTrashAndShares(env: CloudflareBindings, timestamp: numb
   notes: number
   documents: number
   files: number
+  totpEntries: number
   shares: number
 }> {
   const trashCutoff = timestamp - TRASH_RETENTION_MS
@@ -113,11 +114,14 @@ async function cleanupOldTrashAndShares(env: CloudflareBindings, timestamp: numb
     await env.DB.batch(docBatch)
   }
 
-  const [notesRes, filesRes, sharesRes] = await Promise.all([
+  const [notesRes, filesRes, totpRes, sharesRes] = await Promise.all([
     env.DB.prepare("DELETE FROM note WHERE deleted_at IS NOT NULL AND deleted_at < ? LIMIT ?")
       .bind(trashCutoff, DB_BATCH_SIZE)
       .run(),
     env.DB.prepare("DELETE FROM file_object WHERE deleted_at IS NOT NULL AND deleted_at < ? LIMIT ?")
+      .bind(trashCutoff, DB_BATCH_SIZE)
+      .run(),
+    env.DB.prepare("DELETE FROM totp_entry WHERE deleted_at IS NOT NULL AND deleted_at < ? LIMIT ?")
       .bind(trashCutoff, DB_BATCH_SIZE)
       .run(),
     env.DB.prepare(
@@ -134,6 +138,7 @@ async function cleanupOldTrashAndShares(env: CloudflareBindings, timestamp: numb
     notes: notesRes.meta.changes ?? 0,
     documents: expiredDocs.results.length,
     files: filesRes.meta.changes ?? 0,
+    totpEntries: totpRes.meta.changes ?? 0,
     shares: sharesRes.meta.changes ?? 0
   }
 }

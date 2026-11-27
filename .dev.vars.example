@@ -9,3 +9,6 @@ APP_URL=http://localhost:5173
 
 # Optional. Signing secret for OAuth state / device tokens (defaults to ephemeral dev secret locally).
 # TOKEN_SIGNING_SECRET=replace-with-random-32-byte-secret
+
+# Optional. Dedicated AES-256-GCM key for 2FA TOTP secrets (falls back to TOKEN_SIGNING_SECRET locally).
+# TOTP_ENCRYPTION_KEY=replace-with-random-32-byte-totp-key

@@ -120,3 +120,40 @@ export async function verifySignedPayload<T extends Record<string, unknown>>(
     return null
   }
 }
+
+async function deriveAesKey(keyMaterial: string): Promise<CryptoKey> {
+  const hash = await crypto.subtle.digest("SHA-256", encoder.encode(keyMaterial))
+  return crypto.subtle.importKey("raw", hash, { name: "AES-GCM" }, false, ["encrypt", "decrypt"])
+}
+
+export async function encryptSecret(
+  plaintext: string,
+  keyMaterial: string
+): Promise<{ ciphertext: string; iv: string }> {
+  const key = await deriveAesKey(keyMaterial)
+  const iv = new Uint8Array(12)
+  crypto.getRandomValues(iv)
+  const encrypted = await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv },
+    key,
+    encoder.encode(plaintext)
+  )
+  return {
+    ciphertext: bytesToBase64Url(new Uint8Array(encrypted)),
+    iv: bytesToBase64Url(iv)
+  }
+}
+
+export async function decryptSecret(
+  ciphertext: string,
+  iv: string,
+  keyMaterial: string
+): Promise<string> {
+  const key = await deriveAesKey(keyMaterial)
+  const decrypted = await crypto.subtle.decrypt(
+    { name: "AES-GCM", iv: base64UrlToArrayBuffer(iv) },
+    key,
+    base64UrlToArrayBuffer(ciphertext)
+  )
+  return decoder.decode(decrypted)
+}

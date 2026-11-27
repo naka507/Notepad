@@ -1,6 +1,27 @@
 <script setup lang="ts">
-import { PERMISSIONS, type SiteConfig, type StorageStats, type UserStorageSummary } from "@notepad/core"
-import { BookOpen, Check, Copy, GitBranch, HardDrive, KeyRound, Loader2, Lock, Save, Shield, Unlink } from "@lucide/vue"
+import {
+  PERMISSIONS,
+  type DeviceSessionSummary,
+  type SiteConfig,
+  type StorageStats,
+  type UserStorageSummary
+} from "@notepad/core"
+import {
+  BookOpen,
+  Check,
+  Copy,
+  GitBranch,
+  Globe,
+  HardDrive,
+  KeyRound,
+  Loader2,
+  Lock,
+  Monitor,
+  Save,
+  Shield,
+  Smartphone,
+  Unlink
+} from "@lucide/vue"
 import { ElDialog } from "element-plus/es/components/dialog/index"
 import { ElMessage } from "element-plus/es/components/message/index"
 import { computed, onMounted, ref, type Component } from "vue"
@@ -8,7 +29,7 @@ import { useRoute, useRouter } from "vue-router"
 import { api } from "@/api/client"
 import { confirmDialog } from "@/components/confirm"
 import HelpDialog from "@/components/HelpDialog.vue"
-import { t } from "@/i18n"
+import { formatDateTime, t } from "@/i18n"
 import { useAuthStore } from "@/stores/auth"
 import { formatBytes } from "@/utils/format"
 
@@ -20,8 +41,10 @@ const router = useRouter()
 const config = ref<SiteConfig | null>(null)
 const storageStats = ref<StorageStats | null>(null)
 const userStorage = ref<UserStorageSummary | null>(null)
+const devices = ref<DeviceSessionSummary[]>([])
 const loadingConfig = ref(true)
 const loadingStorage = ref(false)
+const loadingDevices = ref(true)
 const helpOpen = ref(false)
 const passwordDialogOpen = ref(false)
 const currentPassword = ref("")
@@ -67,6 +90,7 @@ const userQuotaRatio = computed(() => {
 async function loadData() {
   loadingConfig.value = true
   loadingStorage.value = showStorageCard.value
+  loadingDevices.value = true
 
   const configTask = api
     .config()
@@ -102,7 +126,38 @@ async function loadData() {
           })
       : Promise.resolve()
 
-  await Promise.all([configTask, storageTask])
+  const devicesTask = api
+    .listDevices()
+    .then((res) => {
+      devices.value = res.devices
+    })
+    .catch(() => {})
+    .finally(() => {
+      loadingDevices.value = false
+    })
+
+  await Promise.all([configTask, storageTask, devicesTask])
+}
+
+async function revokeDevice(device: DeviceSessionSummary) {
+  const confirmed = await confirmDialog({
+    title: t("profile.revokeDevice"),
+    message: t("profile.confirmRevokeDevice", { name: device.deviceName }),
+    confirmText: t("profile.revokeDevice"),
+    tone: "danger"
+  })
+  if (!confirmed) return
+  try {
+    await api.revokeDevice(device.id)
+    if (device.isCurrent) {
+      await auth.logout()
+      await router.push("/login")
+      return
+    }
+    devices.value = devices.value.filter((item) => item.id !== device.id)
+  } catch (err) {
+    ElMessage.error(err instanceof Error ? err.message : "Error")
+  }
 }
 
 function openPasswordModal() {
@@ -331,6 +386,52 @@ onMounted(async () => {
             <span>{{ t("profile.lockedFilesNotice", { count: userStorage.lockedFileCount }) }}</span>
           </p>
         </template>
+      </section>
+
+      <!-- Active Devices -->
+      <section class="panel wide">
+        <header>
+          <div class="panel-title">
+            <Monitor :size="18" />
+            <h2>{{ t("profile.devices") }}</h2>
+          </div>
+          <Loader2 v-if="loadingDevices && !devices.length" class="spin muted" :size="15" />
+          <span v-else class="muted device-count">{{ devices.length }}</span>
+        </header>
+
+        <div v-if="loadingDevices && !devices.length" class="card-loading">
+          <Loader2 class="spin" :size="18" />
+          <span>{{ t("common.loading") }}</span>
+        </div>
+
+        <div v-else-if="!devices.length" class="muted device-empty">{{ t("profile.noDevices") }}</div>
+
+        <div v-else class="device-list">
+          <div v-for="device in devices" :key="device.id" class="setting-row">
+            <div class="device-main">
+              <Smartphone v-if="device.platform === 'mobile' || device.platform === 'ios' || device.platform === 'android'" :size="16" class="muted" />
+              <Monitor v-else-if="device.kind === 'device'" :size="16" class="muted" />
+              <Globe v-else :size="16" class="muted" />
+              <div>
+                <div class="device-head">
+                  <strong>{{ device.deviceName }}</strong>
+                  <span v-if="device.isCurrent" class="role-badge">{{ t("profile.currentDevice") }}</span>
+                </div>
+                <p class="muted">
+                  {{ formatDateTime(device.lastSeenAt) }}
+                  <template v-if="device.ipAddress"> · {{ device.ipAddress }}</template>
+                </p>
+              </div>
+            </div>
+            <button
+              class="danger-button small"
+              type="button"
+              @click="revokeDevice(device)"
+            >
+              {{ t("profile.revokeDevice") }}
+            </button>
+          </div>
+        </div>
       </section>
 
       <!-- Admin Site Config -->
@@ -653,6 +754,29 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+.device-count,
+.device-empty {
+  font-size: 12px;
+}
+
+.device-list {
+  display: grid;
+  gap: 8px;
+}
+
+.device-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.device-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .form-grid {
