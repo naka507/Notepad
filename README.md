@@ -10,6 +10,7 @@ Architecture specification: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - `apps/api`: Cloudflare Workers API (Hono + Zod + D1 + R2 + KV)
 - `apps/cleanup`: Hourly Cloudflare Cron Worker for expired sessions, unfinished multipart uploads, R2 deletions, and trash
 - `packages/core`: Shared RBAC roles, quotas, Zod schemas, cursor utilities, and API types
+- `assets/icon.png` & `assets/icon.svg`: 1024×1024 master application icon (reusable for Web/PWA, Tauri desktop `tauri icon`, and Capacitor mobile `@capacitor/assets`)
 
 ## Local Development
 

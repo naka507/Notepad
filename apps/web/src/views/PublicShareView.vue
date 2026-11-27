@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { PublicSharePayload, SheetWorkbook } from "@notepad/core"
-import { Check, Copy, Download, File as FileIcon, FileSpreadsheet, FileText, Loader2, Lock, StickyNote } from "@lucide/vue"
+import { Check, Copy, Download, File as FileIcon, FileSpreadsheet, FileText, Loader2, Lock } from "@lucide/vue"
 import { computed, onMounted, ref } from "vue"
 import { useRoute } from "vue-router"
 import { api } from "@/api/client"
@@ -71,7 +71,7 @@ onMounted(loadShare)
   <main class="public-page">
     <div class="public-top">
       <div class="public-brand">
-        <StickyNote :size="18" />
+        <img src="/favicon.svg" alt="Notepad" class="brand-logo" />
         <span>Notepad</span>
       </div>
       <div class="public-tools">

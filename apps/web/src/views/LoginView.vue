@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { SiteConfig } from "@notepad/core"
-import { GitBranch, Loader2, LogIn, StickyNote, UserPlus } from "@lucide/vue"
+import { GitBranch, Loader2, LogIn, UserPlus } from "@lucide/vue"
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { useRouter } from "vue-router"
 import { api } from "@/api/client"
@@ -161,7 +161,7 @@ onBeforeUnmount(removeTurnstile)
   <main class="login-page">
     <section class="login-panel">
       <div class="login-head">
-        <StickyNote :size="24" />
+        <img src="/favicon.svg" alt="Notepad" class="brand-logo lg" />
         <h1>Notepad</h1>
         <div class="login-tools">
           <ThemeToggle />

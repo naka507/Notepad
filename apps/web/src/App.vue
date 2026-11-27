@@ -46,7 +46,7 @@ async function logout() {
   <div class="app-shell">
     <header v-if="showTopbar" class="topbar">
       <button class="brand" type="button" @click="goHome">
-        <StickyNote :size="20" />
+        <img src="/favicon.svg" alt="Notepad" class="brand-logo" />
         <span>Notepad</span>
       </button>
 
