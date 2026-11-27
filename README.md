@@ -8,6 +8,7 @@ Architecture specification: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
 - `apps/web`: Vue 3 + Vite + Pinia + Element Plus frontend (Cloudflare Pages + Pages Function Service Binding)
 - `apps/desktop`: Electron desktop app with rewritten 3-pane layout (frameless titlebar, Activity Rail, `Ctrl+K` Command Palette, system tray, `safeStorage` OS keychain, offline sync cache, `notepad://` OAuth deep link)
+- `apps/mobile`: Capacitor mobile app (Android/iOS) with rewritten single-stack + bottom 5-Tab layout, card-style 2FA authenticator, live camera `otpauth://` QR scanner, biometric/PIN lock, and member-consistent mobile settings
 - `apps/api`: Cloudflare Workers API (Hono + Zod + D1 + R2 + KV)
 - `apps/cleanup`: Hourly Cloudflare Cron Worker for expired sessions, unfinished multipart uploads, R2 deletions, and trash
 - `packages/core`: Shared RBAC roles, quotas, Zod schemas, cursor utilities, and API types
@@ -35,6 +36,21 @@ npm run dev:desktop
 # Production build & platform installer packaging (NSIS / DMG / AppImage)
 npm run build:desktop
 npm run package:desktop
+```
+
+### Mobile App (Capacitor Android / iOS)
+
+```sh
+# Preview mobile UI in browser (http://127.0.0.1:5181)
+npm run dev:mobile
+
+# Build mobile web bundle & sync native Capacitor projects
+npm run build:mobile
+npm run cap:sync
+
+# Add and open native Android / iOS projects
+npm run cap:add:android -w @notepad/mobile
+npm run cap:open:android -w @notepad/mobile
 ```
 
 - Web UI: `http://localhost:5173`

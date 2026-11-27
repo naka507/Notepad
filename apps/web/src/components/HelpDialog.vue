@@ -16,8 +16,9 @@ import { computed, ref, type Component } from "vue"
 import { t } from "@/i18n"
 import { useAuthStore } from "@/stores/auth"
 
-defineProps<{
+const props = defineProps<{
   modelValue: boolean
+  hideAdminSections?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -26,7 +27,7 @@ const emit = defineEmits<{
 
 const UiDialog = ElDialog as unknown as Component
 const auth = useAuthStore()
-const isAdmin = computed(() => auth.user?.role === ROLES.ADMIN)
+const isAdmin = computed(() => !props.hideAdminSections && auth.user?.role === ROLES.ADMIN)
 const activeTab = ref<"roles" | "features" | "account">("roles")
 const visibleTab = computed<"roles" | "features" | "account">(() =>
   isAdmin.value ? activeTab.value : "features"

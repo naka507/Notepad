@@ -887,6 +887,6 @@ npm run deploy:web            # 部署 Cloudflare Pages
 | 阶段 | 交付范围 | 核心验收目标 |
 | :--- | :--- | :--- |
 | **Milestone 1（Web MVP ✅ 已上线）** | Monorepo 脚手架、D1/R2/KV 绑定、注册/登录、首位自动管理员、GitHub 双向绑定与补设密码、RBAC 四角色与即时降级锁定、笔记/文档/表格/文件四模块独立分类、暗黑模式、全平台应用图标、5MB 直传 + 自适应分片上传、匿名分享、存储容器面板 | 已部署至 Cloudflare Free Tier（`https://note.qqx.qzz.io`），端到端跑通全部核心链路 |
-| **Milestone 2（同步与 2FA 底座）** | `sync/cursor` + `sync/pull` + `sync/push` 增量同步与冲突处理、Web 端 2FA（TOTP）验证码保险箱（AES-256-GCM 加密存储 + 手动/URI/图片二维码录入）、原生端 Bearer/Refresh Token 轮换、GitHub OAuth 原生回跳交换与已登录设备远程踢出 | 多端增量同步与 2FA 验证码保险箱上线运行，且 D1/Workers 读写保持在 Free Tier 安全水位内 |
-| **Milestone 3（桌面端：Electron）** | Electron 桌面端（Windows/macOS/Linux）、独立重写无边框三栏布局、系统密钥链 `safeStorage`、系统托盘、`Ctrl+K` 快捷检索与离线缓存同步 | 桌面端具备原生级三栏效率布局与快捷键体验，支持多端增量同步 |
-| **Milestone 4（移动端 + 扫码 2FA）** | Capacitor 打包 Android/iOS、独立重写单栈 + 底部 Tab 移动端布局、原生相机扫描 `otpauth://` 二维码、生物识别解锁保护 2FA 保险箱 | 手机扫码录入 2FA 后快速加密同步至桌面端与 Web 端并准确生成动态验证码 |
+| **Milestone 2（同步与 2FA 底座 ✅ 已上线）** | `sync/cursor` + `sync/pull` + `sync/push` 增量同步与冲突处理、Web 端 2FA（TOTP）验证码保险箱（AES-256-GCM 加密存储 + 手动/URI/图片二维码录入）、原生端 Bearer/Refresh Token 轮换、GitHub OAuth 原生回跳交换与已登录设备远程踢出 | 多端增量同步与 2FA 验证码保险箱上线运行，且 D1/Workers 读写保持在 Free Tier 安全水位内 |
+| **Milestone 3（桌面端：Electron ✅ 已交付）** | Electron 桌面端（Windows/macOS/Linux）、独立重写无边框三栏布局、系统密钥链 `safeStorage`、系统托盘、`Ctrl+K` 快捷检索与离线缓存同步 | 桌面端具备原生级三栏效率布局与快捷键体验，支持多端增量同步 |
+| **Milestone 4（移动端 + 扫码 2FA ✅ 已交付）** | Capacitor 打包 Android/iOS、独立重写单栈 + 底部 5 Tab 移动端布局、卡片式大字 `动态码` 与原生相机扫描 `otpauth://` 二维码、生物识别/PIN 锁屏保护、移动端精简设置（管理员与会员保持一致） | 手机扫码录入 2FA 后快速加密同步至桌面端与 Web 端并准确生成动态验证码 |
