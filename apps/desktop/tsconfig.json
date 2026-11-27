@@ -1,0 +1,33 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "jsx": "preserve",
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/renderer/*"],
+      "@web/*": ["../web/src/*"],
+      "@notepad/core": ["../../packages/core/src/index.ts"]
+    },
+    "types": ["vite/client"]
+  },
+  "include": [
+    "src/renderer/**/*.ts",
+    "src/renderer/**/*.d.ts",
+    "src/renderer/**/*.vue",
+    "../web/src/components/CategoryPicker.vue",
+    "../web/src/components/DocEditor.vue",
+    "../web/src/components/HelpDialog.vue",
+    "../web/src/components/LocaleSwitcher.vue",
+    "../web/src/components/ShareDialog.vue",
+    "../web/src/components/SheetEditor.vue",
+    "../web/src/components/ThemeToggle.vue",
+    "../web/src/components/confirm.ts",
+    "../web/src/i18n.ts",
+    "../web/src/theme.ts",
+    "../web/src/utils/*.ts"
+  ]
+}

@@ -4,6 +4,8 @@ node_modules/
 .wrangler-logs/
 .dev.vars
 dist/
+dist-electron/
+release/
 coverage/
 *.log
 *.tsbuildinfo

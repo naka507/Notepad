@@ -6,3 +6,6 @@ APP_URL=http://localhost:5173
 
 # Recommended in production for signed OAuth state & share tokens
 # TOKEN_SIGNING_SECRET=replace-with-random-secret
+
+# Recommended in production for AES-256-GCM encryption of 2FA (TOTP) secrets in D1
+# TOTP_ENCRYPTION_KEY=replace-with-32-byte-hex-or-base64-secret

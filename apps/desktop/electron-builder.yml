@@ -1,0 +1,29 @@
+appId: io.qzz.qqx.note.desktop
+productName: Notepad
+directories:
+  output: release
+files:
+  - dist/**/*
+  - dist-electron/**/*
+  - package.json
+extraMetadata:
+  main: dist-electron/main.cjs
+protocols:
+  - name: Notepad Auth
+    schemes:
+      - notepad
+win:
+  icon: ../../apps/web/public/favicon.ico
+  target:
+    - nsis
+    - portable
+mac:
+  icon: ../../assets/icon.png
+  category: public.app-category.productivity
+  target:
+    - dmg
+linux:
+  icon: ../../assets/icon.png
+  category: Utility
+  target:
+    - AppImage

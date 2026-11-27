@@ -51,8 +51,11 @@ const ttlOptions = computed(() => {
 })
 
 const shareUrl = computed(() => {
-  if (!createdShare.value || typeof window === "undefined") return ""
-  return `${window.location.origin}/s/${createdShare.value.shareCode}`
+  if (!createdShare.value) return ""
+  const base =
+    ("serverUrl" in api && typeof api.serverUrl === "string" && api.serverUrl) ||
+    (typeof window !== "undefined" ? window.location.origin : "")
+  return base ? `${base.replace(/\/+$/g, "")}/s/${createdShare.value.shareCode}` : ""
 })
 
 watch(

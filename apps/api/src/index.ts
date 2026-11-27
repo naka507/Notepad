@@ -1,5 +1,6 @@
 import { SESSION_COOKIE_NAME, SITE_CONFIG_KV_KEY } from "@notepad/core"
 import { Hono } from "hono"
+import { cors } from "hono/cors"
 import { HTTPException } from "hono/http-exception"
 import { authMiddleware, type AppEnv } from "./lib/auth"
 import { adminRoutes } from "./routes/admin"
@@ -13,6 +14,25 @@ import { syncRoutes } from "./routes/sync"
 import { totpRoutes } from "./routes/totp"
 
 const app = new Hono<AppEnv>()
+
+app.use(
+  "/api/*",
+  cors({
+    origin: "*",
+    allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowHeaders: [
+      "Content-Type",
+      "Authorization",
+      "X-File-Name",
+      "X-File-Mime",
+      "X-File-Size",
+      "X-File-Category",
+      "X-File-Sha256"
+    ],
+    exposeHeaders: ["Content-Disposition", "Content-Range", "ETag"],
+    maxAge: 86400
+  })
+)
 
 app.use("/api/*", authMiddleware)
 
